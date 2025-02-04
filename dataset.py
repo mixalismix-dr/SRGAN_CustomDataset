@@ -4,23 +4,44 @@ import os
 from PIL import Image
 import numpy as np
 import random
+from glob import glob
 
 
 class mydata(Dataset):
-    def __init__(self, LR_path, GT_path, in_memory = True, transform = None):
-        
+    def __init__(self, LR_path, GT_path, in_memory = True, transform = None, num_samples_per_class = 100):
+        """
+        Dataset for training SR models with category-based images.
+
+        Args:
+            LR_root (str): Path to the low-resolution (LR) images directory.
+            GT_root (str): Path to the high-resolution (HR) images directory.
+            in_memory (bool): Whether to load all images into RAM.
+            transform: Transformations for augmentation.
+            num_samples_per_class (int): Number of samples to load per category.
+        """
         self.LR_path = LR_path
         self.GT_path = GT_path
         self.in_memory = in_memory
         self.transform = transform
-        
-        self.LR_img = sorted(os.listdir(LR_path))
-        self.GT_img = sorted(os.listdir(GT_path))
-        
-        if in_memory:
-            self.LR_img = [np.array(Image.open(os.path.join(self.LR_path, lr)).convert("RGB")).astype(np.uint8) for lr in self.LR_img]
-            self.GT_img = [np.array(Image.open(os.path.join(self.GT_path, gt)).convert("RGB")).astype(np.uint8) for gt in self.GT_img]
-        
+        self.image_pairs = []
+        self.categories = sorted(os.listdir(GT_path))
+
+        self.class_to_idx = {category: i for i, category in enumerate(self.categories)}
+
+        for category in self.categories:
+            LR_category_path = os.path.join(LR_path, category)
+            GT_category_path = os.path.join(GT_path, category)
+
+            if os.path.isdir(LR_category_path) and os.path.isdir(GT_category_path):
+                LR_images = sorted(glob(os.path.join(LR_category_path, "*.tif")))
+                GT_images = sorted(glob(os.path.join(GT_category_path, "*.tif")))
+
+                pairs = list(zip(LR_images, GT_images))
+                random.shuffle(pairs)
+                selected_pairs = pairs[:num_samples_per_class]
+
+                self.image_pairs.extend(selected_pairs)
+
     def __len__(self):
         
         return len(self.LR_img)

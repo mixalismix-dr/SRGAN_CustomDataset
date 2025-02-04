@@ -2,8 +2,8 @@ import os
 from osgeo import gdal
 
 # Input and output paths
-input_file = r"D:\Super_Resolution\Delft\LR\vrt\Delft_lr.vrt"  # Path to your VRT or raster file
-output_dir = r"D:\Super_Resolution\Delft\LR\vrt\tiles_64x64"  # Directory to save tiles
+input_file = r"D:\Super_Resolution\Rotterdam\hr_1km_1km\Rotterdam_hr_1km_1km_2_3.tif"  # Path to your raster file
+output_dir = r"D:\Super_Resolution\Rotterdam\real_hr\tiles_256_2_3"  # Directory to save tiles
 metadata_dir = os.path.join(output_dir, "metadata")  # Directory to save metadata files
 os.makedirs(metadata_dir, exist_ok=True)
 
@@ -51,7 +51,6 @@ for x_off in range(0, raster_width - tile_size + 1, step_size):
                 meta.write(f"Height: {tile_size} pixels\n")
                 meta.write(f"GeoTransform: {tile_geo_transform}\n")
                 meta.write(f"Projection: {projection}\n")
-            print(f"Metadata saved: {metadata_file}")
         else:
             print(f"Tile does not exist: {output_tile}")
 
