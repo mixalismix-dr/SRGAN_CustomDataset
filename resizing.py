@@ -57,9 +57,9 @@ def resize_images(input_dir, output_dir, scale=4, resampling="lanczos", mode="do
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Resize images using various resampling methods.")
 
-    parser.add_argument("--input_dir", type=str, default=r"D:\Super_Resolution\Delft\HR\real_hr\tiles_256\test",
+    parser.add_argument("--input_dir", type=str, default=r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\custom_dataset\train_HR3",
                         help="Path to the input directory containing images.")
-    parser.add_argument("--output_dir", type=str, default=r"D:\Super_Resolution\Delft\HR\real_hr\tiles_256\resized",
+    parser.add_argument("--output_dir", type=str, default=r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\custom_dataset\train_LR3",
                         help="Path to the output directory for resized images.")
     parser.add_argument("--scale", type=int, default=4, help="Scaling factor (default=4).")
     parser.add_argument("--resampling", type=str, choices=RESAMPLING_METHODS.keys(), default="lanczos",

@@ -8,7 +8,7 @@ from shapely.validation import make_valid
 import os
 
 # Paths
-tiles_dir = r"D:\Super_Resolution\Rotterdam\real_hr\tiles_256"  # Tiles folder
+tiles_dir = r"D:\Super_Resolution\Rotterdam\real_hr\tiles_256_1_1"  # Tiles folder
 land_use_path = r"D:\Super_Resolution\shp\land_use_rott.shp"  # Land use shapefile
 
 # Define the grid size based on raster pixel size
@@ -60,6 +60,8 @@ category_mapping = {
     "Other roads and associated land": "Industrial & Infrastructure",
     "Construction sites": "Industrial & Infrastructure",
     "Fast transit roads and associated land": "Industrial & Infrastructure",
+    "Airports": "Industrial & Infrastructure",
+    "Permanent crops (vineyards, fruit trees, olive groves)": "Non-Urban / Green",
 }
 
 
