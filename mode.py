@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from losses import TVLoss, perceptual_loss
 from dataset import *
 from srgan_model import Generator, Discriminator
-from vgg19 import vgg19
+from vgg19_model import vgg19
 import numpy as np
 from tqdm import tqdm
 from skimage.color import rgb2ycbcr
