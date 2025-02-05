@@ -1,49 +1,73 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
+import matplotlib.pyplot as plt
 from losses import TVLoss, perceptual_loss
 from dataset import *
 from srgan_model import Generator, Discriminator
 from vgg19 import vgg19
 import numpy as np
-from PIL import Image
-from skimage.color import rgb2ycbcr
-from skimage.metrics import peak_signal_noise_ratio
-import rasterio
-from rasterio import Affine
-import glob
+from tqdm import tqdm
+
+# Initialize lists for tracking loss values
+pretrain_losses = []
+g_losses = []
+d_losses = []
+epochs = []
+
+
+# Function to plot and save loss graphs
+def plot_losses(pretrain_losses, g_losses, d_losses, output_dir="loss_plots"):
+    os.makedirs(output_dir, exist_ok=True)
+    plt.figure(figsize=(10, 5))
+
+    # Plot L2 loss (pretraining)
+    if pretrain_losses:
+        plt.plot(range(len(pretrain_losses)), pretrain_losses, label="Pretrain L2 Loss", color='blue')
+
+    # Plot GAN losses (fine-tuning)
+    if g_losses and d_losses:
+        plt.plot(range(len(pretrain_losses), len(pretrain_losses) + len(g_losses)), g_losses, label="Generator Loss",
+                 color='red')
+        plt.plot(range(len(pretrain_losses), len(pretrain_losses) + len(d_losses)), d_losses,
+                 label="Discriminator Loss", color='green')
+
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("Training Loss Progress")
+    plt.savefig(os.path.join(output_dir, "loss_plot.png"))
+    plt.show()
 
 
 def train(args):
-    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    transform  = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
-    dataset = mydata(GT_path = args.GT_path, LR_path = args.LR_path, in_memory = args.in_memory, transform = transform)
-    loader = DataLoader(dataset, batch_size = args.batch_size, shuffle = True, num_workers = args.num_workers)
-    
-    generator = Generator(img_feat = 3, n_feats = 64, kernel_size = 3, num_block = args.res_num, scale=args.scale)
-    
-    
-    if args.fine_tuning:        
+
+    transform = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
+    dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, in_memory=args.in_memory, transform=transform)
+    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+
+    generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num, scale=args.scale).to(device)
+
+    if args.fine_tuning:
         generator.load_state_dict(torch.load(args.generator_path))
-        print("pre-trained model is loaded")
-        print("path : %s"%(args.generator_path))
-        
-    generator = generator.to(device)
+        print("Pre-trained model loaded:", args.generator_path)
+
     generator.train()
-    
+
     l2_loss = nn.MSELoss()
-    g_optim = optim.Adam(generator.parameters(), lr = 1e-4)
-        
+    g_optim = optim.Adam(generator.parameters(), lr=1e-4)
+
     pre_epoch = 0
     fine_epoch = 0
-    
-    #### Train using L2_loss
+
+    #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
-        for i, tr_data in enumerate(loader):
+        epoch_loss = 0
+        for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch}/{args.pre_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
 
@@ -54,87 +78,86 @@ def train(args):
             loss.backward()
             g_optim.step()
 
+            epoch_loss += loss.item()
+
+        pretrain_losses.append(epoch_loss / len(loader))
         pre_epoch += 1
 
-        if pre_epoch % 2 == 0:
-            print(pre_epoch)
-            print(loss.item())
-            print('=========')
-        
-        if pre_epoch % 800 ==0:
-            torch.save(generator.state_dict(), './model/pre_trained_model_%03d.pt'%pre_epoch)
+        if pre_epoch % 50 == 0:
+            print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}")
+            plot_losses(pretrain_losses, g_losses, d_losses)
 
-        
-    #### Train using perceptual & adversarial loss
-    vgg_net = vgg19().to(device)
-    vgg_net = vgg_net.eval()
-    
-    discriminator = Discriminator(patch_size = args.patch_size * args.scale)
-    discriminator = discriminator.to(device)
-    discriminator.train()
-    
-    d_optim = optim.Adam(discriminator.parameters(), lr = 1e-4)
-    scheduler = optim.lr_scheduler.StepLR(g_optim, step_size = 2000, gamma = 0.1)
-    
+        if pre_epoch % 800 == 0:
+            torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
+
+    #### **Fine-Tuning Using Perceptual & Adversarial Loss**
+    vgg_net = vgg19().to(device).eval()
+    discriminator = Discriminator(patch_size=args.patch_size * args.scale).to(device).train()
+
+    d_optim = optim.Adam(discriminator.parameters(), lr=1e-4)
+    scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+
     VGG_loss = perceptual_loss(vgg_net)
     cross_ent = nn.BCELoss()
     tv_loss = TVLoss()
+
     real_label = torch.ones((args.batch_size, 1)).to(device)
     fake_label = torch.zeros((args.batch_size, 1)).to(device)
-    
+
     while fine_epoch < args.fine_train_epoch:
-        
         scheduler.step()
-        
-        for i, tr_data in enumerate(loader):
+
+        epoch_g_loss = 0
+        epoch_d_loss = 0
+
+        for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch}/{args.fine_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
-            ## Training Discriminator
+
+            ## **Training Discriminator**
             output, _ = generator(lr)
             fake_prob = discriminator(output)
             real_prob = discriminator(gt)
+
             d_loss_real = cross_ent(real_prob, real_label)
             d_loss_fake = cross_ent(fake_prob, fake_label)
-            
             d_loss = d_loss_real + d_loss_fake
 
-            g_optim.zero_grad()
             d_optim.zero_grad()
             d_loss.backward()
             d_optim.step()
-            
-            ## Training Generator
+
+            ## **Training Generator**
             output, _ = generator(lr)
             fake_prob = discriminator(output)
-            
-            _percep_loss, hr_feat, sr_feat = VGG_loss((gt + 1.0) / 2.0, (output + 1.0) / 2.0, layer = args.feat_layer)
-            
-            L2_loss = l2_loss(output, gt)
+
+            _percep_loss, hr_feat, sr_feat = VGG_loss((gt + 1.0) / 2.0, (output + 1.0) / 2.0, layer=args.feat_layer)
+
+            l2_loss_value = l2_loss(output, gt)
             percep_loss = args.vgg_rescale_coeff * _percep_loss
             adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
-            total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat)**2)
-            
-            g_loss = percep_loss + adversarial_loss + total_variance_loss + L2_loss
-            
+            total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
+
+            g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
+
             g_optim.zero_grad()
-            d_optim.zero_grad()
             g_loss.backward()
             g_optim.step()
 
-            
+            epoch_g_loss += g_loss.item()
+            epoch_d_loss += d_loss.item()
+
+        g_losses.append(epoch_g_loss / len(loader))
+        d_losses.append(epoch_d_loss / len(loader))
         fine_epoch += 1
 
-        if fine_epoch % 2 == 0:
-            print(fine_epoch)
-            print(g_loss.item())
-            print(d_loss.item())
-            print('=========')
+        if fine_epoch % 50 == 0:
+            print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
+            plot_losses(pretrain_losses, g_losses, d_losses)
 
-        if fine_epoch % 500 ==0:
-            #torch.save(generator.state_dict(), './model/SRGAN_gene_%03d.pt'%fine_epoch)
-            #torch.save(discriminator.state_dict(), './model/SRGAN_discrim_%03d.pt'%fine_epoch)
-            torch.save(generator.state_dict(), './model/SRGAN_gene_%03d.pt'%fine_epoch)
-            torch.save(discriminator.state_dict(), './model/SRGAN_discrim_%03d.pt'%fine_epoch)
+        if fine_epoch % 500 == 0:
+            torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
+            torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
 
 
 # In[ ]:
