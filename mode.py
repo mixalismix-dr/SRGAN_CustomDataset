@@ -24,13 +24,13 @@ d_losses = []
 epochs_pretrain = []
 epochs_finetune = []
 
-# **Function to plot loss**
-def plot_loss(epochs, losses, title, ylabel, filename, second_losses=None, second_label=None):
+
+def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=None, second_label=None):
     os.makedirs("loss_plots", exist_ok=True)
     plt.figure(figsize=(10, 5))
 
     # Plot primary loss (L2 loss OR Generator Loss)
-    plt.plot(epochs, losses, label=title, color='blue' if "L2" in title else 'red')
+    plt.plot(epochs, losses, label=primary_label, color='blue' if "L2" in primary_label else 'red')
 
     # If a second loss (Discriminator Loss) is provided, plot it on the same graph
     if second_losses is not None and second_label is not None:
@@ -38,7 +38,7 @@ def plot_loss(epochs, losses, title, ylabel, filename, second_losses=None, secon
 
     plt.xlabel("Epochs")
     plt.ylabel(ylabel)
-    plt.title(title)
+    plt.title(f"{primary_label} Loss Curve" if second_losses is None else "Generator & Discriminator Losses")
     plt.legend()
     plt.savefig(f"loss_plots/{filename}")
     plt.show()
@@ -88,7 +88,7 @@ def train(args):
 
         if pre_epoch % 50 == 0:
             print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}")
-            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss (Pre-Training)", "Loss", "pretrain_L2_loss.png")
+            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png")
 
         if pre_epoch % 800 == 0:
             torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
@@ -160,7 +160,7 @@ def train(args):
 
         if fine_epoch % 50 == 0:
             print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
-            plot_loss(epochs_finetune, g_losses, "GAN Training Losses", "Loss", "gan_losses.png",
+            plot_loss(epochs_finetune, g_losses, "Generator Loss", "Loss", "gan_losses.png",
                       second_losses=d_losses, second_label="Discriminator Loss")
 
         if fine_epoch % 500 == 0:
