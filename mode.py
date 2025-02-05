@@ -16,6 +16,7 @@ from skimage.metrics import peak_signal_noise_ratio
 import rasterio
 import glob
 from rasterio.transform import Affine
+from torch.utils.tensorboard import SummaryWriter
 
 # Tracking loss values
 pretrain_losses = []
@@ -24,6 +25,8 @@ d_losses = []
 epochs_pretrain = []
 epochs_finetune = []
 
+# Create a TensorBoard writer
+writer = SummaryWriter(log_dir="runs/srgan_experiment")
 
 def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=None, second_label=None):
     os.makedirs("loss_plots", exist_ok=True)
@@ -41,7 +44,7 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
     plt.title(f"{primary_label} Loss Curve" if second_losses is None else "Generator & Discriminator Losses")
     plt.legend()
     plt.savefig(f"loss_plots/{filename}")
-    plt.show()
+    plt.close()
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -82,6 +85,10 @@ def train(args):
             epoch_loss += loss.item()
 
         pretrain_losses.append(epoch_loss / len(loader))
+        epochs_pretrain.append(pre_epoch)
+        avg_l2_loss = epoch_loss / len(loader)
+        writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)  # Log L2 loss
+        pretrain_losses.append(avg_l2_loss)
         epochs_pretrain.append(pre_epoch)
 
         pre_epoch += 1
@@ -153,6 +160,12 @@ def train(args):
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
 
+        avg_g_loss = epoch_g_loss / len(loader)
+        avg_d_loss = epoch_d_loss / len(loader)
+
+        writer.add_scalar("Loss/Generator_Loss", avg_g_loss, fine_epoch)  # Log Generator loss
+        writer.add_scalar("Loss/Discriminator_Loss", avg_d_loss, fine_epoch)  # Log Discriminator loss
+
         g_losses.append(epoch_g_loss / len(loader))
         d_losses.append(epoch_d_loss / len(loader))
         epochs_finetune.append(fine_epoch)
@@ -167,6 +180,8 @@ def train(args):
             torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
             torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
 
+
+writer.close()
 
 # In[ ]:
 
@@ -280,3 +295,5 @@ def test_only(args):
                     dst.write((output * 255).astype(np.uint8).transpose(2, 0, 1))  # Save as uint8
 
             print(f"Saved SR image with metadata: {output_tile_path}")
+
+
