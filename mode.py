@@ -12,34 +12,23 @@ from vgg19 import vgg19
 import numpy as np
 from tqdm import tqdm
 
-# Initialize lists for tracking loss values
+# Tracking loss values
 pretrain_losses = []
 g_losses = []
 d_losses = []
-epochs = []
+epochs_pretrain = []
+epochs_finetune = []
 
-
-# Function to plot and save loss graphs
-def plot_losses(pretrain_losses, g_losses, d_losses, output_dir="loss_plots"):
-    os.makedirs(output_dir, exist_ok=True)
+# **Function to plot loss**
+def plot_loss(epochs, losses, title, ylabel, filename):
+    os.makedirs("loss_plots", exist_ok=True)
     plt.figure(figsize=(10, 5))
-
-    # Plot L2 loss (pretraining)
-    if pretrain_losses:
-        plt.plot(range(len(pretrain_losses)), pretrain_losses, label="Pretrain L2 Loss", color='blue')
-
-    # Plot GAN losses (fine-tuning)
-    if g_losses and d_losses:
-        plt.plot(range(len(pretrain_losses), len(pretrain_losses) + len(g_losses)), g_losses, label="Generator Loss",
-                 color='red')
-        plt.plot(range(len(pretrain_losses), len(pretrain_losses) + len(d_losses)), d_losses,
-                 label="Discriminator Loss", color='green')
-
+    plt.plot(epochs, losses, label=title, color='blue' if "L2" in title else 'red' if "Generator" in title else 'green')
     plt.xlabel("Epochs")
-    plt.ylabel("Loss")
+    plt.ylabel(ylabel)
+    plt.title(title)
     plt.legend()
-    plt.title("Training Loss Progress")
-    plt.savefig(os.path.join(output_dir, "loss_plot.png"))
+    plt.savefig(f"loss_plots/{filename}")
     plt.show()
 
 
@@ -81,11 +70,13 @@ def train(args):
             epoch_loss += loss.item()
 
         pretrain_losses.append(epoch_loss / len(loader))
+        epochs_pretrain.append(pre_epoch)
+
         pre_epoch += 1
 
         if pre_epoch % 50 == 0:
             print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}")
-            plot_losses(pretrain_losses, g_losses, d_losses)
+            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss (Pre-Training)", "Loss", "pretrain_L2_loss.png")
 
         if pre_epoch % 800 == 0:
             torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
@@ -149,11 +140,13 @@ def train(args):
 
         g_losses.append(epoch_g_loss / len(loader))
         d_losses.append(epoch_d_loss / len(loader))
+        epochs_finetune.append(fine_epoch)
         fine_epoch += 1
 
         if fine_epoch % 50 == 0:
             print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
-            plot_losses(pretrain_losses, g_losses, d_losses)
+            plot_loss(epochs_finetune, g_losses, "Generator Loss (Fine-Tuning)", "Loss", "generator_loss.png")
+            plot_loss(epochs_finetune, d_losses, "Discriminator Loss (Fine-Tuning)", "Loss", "discriminator_loss.png")
 
         if fine_epoch % 500 == 0:
             torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
