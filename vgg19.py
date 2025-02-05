@@ -8,7 +8,7 @@ class vgg19(nn.Module):
     
     def __init__(self, pre_trained = True, require_grad = False):
         super(vgg19, self).__init__()
-        self.vgg_feature = vgg19(weights=VGG19_Weights.IMAGENET1K_V1).features
+        self.vgg_feature = vgg19(weights=VGG19_Weights.IMAGENET1K_V1 if pre_trained else None).features
         self.seq_list = [nn.Sequential(ele) for ele in self.vgg_feature]
         self.vgg_layer = ['conv1_1', 'relu1_1', 'conv1_2', 'relu1_2', 'pool1', 
                          'conv2_1', 'relu2_1', 'conv2_2', 'relu2_2', 'pool2',
