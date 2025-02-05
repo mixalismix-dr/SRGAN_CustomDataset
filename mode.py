@@ -11,6 +11,11 @@ from srgan_model import Generator, Discriminator
 from vgg19 import vgg19
 import numpy as np
 from tqdm import tqdm
+from skimage.color import rgb2ycbcr
+from skimage.metrics import peak_signal_noise_ratio
+import rasterio
+import glob
+from rasterio.transform import Affine
 
 # Tracking loss values
 pretrain_losses = []
@@ -20,17 +25,23 @@ epochs_pretrain = []
 epochs_finetune = []
 
 # **Function to plot loss**
-def plot_loss(epochs, losses, title, ylabel, filename):
+def plot_loss(epochs, losses, title, ylabel, filename, second_losses=None, second_label=None):
     os.makedirs("loss_plots", exist_ok=True)
     plt.figure(figsize=(10, 5))
-    plt.plot(epochs, losses, label=title, color='blue' if "L2" in title else 'red' if "Generator" in title else 'green')
+
+    # Plot primary loss (L2 loss OR Generator Loss)
+    plt.plot(epochs, losses, label=title, color='blue' if "L2" in title else 'red')
+
+    # If a second loss (Discriminator Loss) is provided, plot it on the same graph
+    if second_losses is not None and second_label is not None:
+        plt.plot(epochs, second_losses, label=second_label, color='green')
+
     plt.xlabel("Epochs")
     plt.ylabel(ylabel)
     plt.title(title)
     plt.legend()
     plt.savefig(f"loss_plots/{filename}")
     plt.show()
-
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,6 +77,7 @@ def train(args):
             g_optim.zero_grad()
             loss.backward()
             g_optim.step()
+            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
             epoch_loss += loss.item()
 
@@ -117,6 +129,8 @@ def train(args):
             d_optim.zero_grad()
             d_loss.backward()
             d_optim.step()
+            optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
+
 
             ## **Training Generator**
             output, _ = generator(lr)
@@ -134,6 +148,7 @@ def train(args):
             g_optim.zero_grad()
             g_loss.backward()
             g_optim.step()
+            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
@@ -145,8 +160,8 @@ def train(args):
 
         if fine_epoch % 50 == 0:
             print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
-            plot_loss(epochs_finetune, g_losses, "Generator Loss (Fine-Tuning)", "Loss", "generator_loss.png")
-            plot_loss(epochs_finetune, d_losses, "Discriminator Loss (Fine-Tuning)", "Loss", "discriminator_loss.png")
+            plot_loss(epochs_finetune, g_losses, "GAN Training Losses", "Loss", "gan_losses.png",
+                      second_losses=d_losses, second_label="Discriminator Loss")
 
         if fine_epoch % 500 == 0:
             torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
