@@ -11,7 +11,7 @@ parser.add_argument("--LR_path", type = str, default = '../DIV2K/DIV2K_train_LR_
 parser.add_argument("--GT_path", type = str, default = '../DIV2K/DIV2K_train_HR/')
 parser.add_argument("--res_num", type = int, default = 16)
 parser.add_argument("--num_workers", type = int, default = 0)
-parser.add_argument("--batch_size", type = int, default = 38)
+parser.add_argument("--batch_size", type = int, default = 64)
 parser.add_argument("--L2_coeff", type = float, default = 1.0)
 parser.add_argument("--adv_coeff", type = float, default = 1e-3)
 parser.add_argument("--tv_loss_coeff", type = float, default = 0.0)
