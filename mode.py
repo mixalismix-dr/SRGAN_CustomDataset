@@ -17,6 +17,7 @@ import rasterio
 import glob
 from rasterio.transform import Affine
 from torch.utils.tensorboard import SummaryWriter
+import torch.nn.functional as F
 
 # Tracking loss values
 pretrain_losses = []
@@ -27,6 +28,7 @@ epochs_finetune = []
 
 # Create a TensorBoard writer
 writer = SummaryWriter(log_dir="runs/srgan_experiment")
+
 
 def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=None, second_label=None):
     os.makedirs("loss_plots", exist_ok=True)
@@ -45,6 +47,7 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
     plt.legend()
     plt.savefig(f"loss_plots/{filename}")
     plt.close()
+
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -138,7 +141,6 @@ def train(args):
             d_optim.step()
             optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
-
             ## **Training Generator**
             output, _ = generator(lr)
             fake_prob = discriminator(output)
@@ -183,30 +185,30 @@ def train(args):
 
 writer.close()
 
+
 # In[ ]:
 
 def test(args):
-    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
-    dataset = mydata(GT_path = args.GT_path, LR_path = args.LR_path, in_memory = False, transform = None)
-    loader = DataLoader(dataset, batch_size = 1, shuffle = False, num_workers = args.num_workers)
-    
-    generator = Generator(img_feat = 3, n_feats = 64, kernel_size = 3, num_block = args.res_num)
+    dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, in_memory=False, transform=None)
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
+
+    generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num)
     generator.load_state_dict(torch.load(args.generator_path))
     generator = generator.to(device)
     generator.eval()
-    
-    f = open('./result.txt', 'w')
+
+    f = open('./result1.txt', 'w')
     psnr_list = []
-    
+
     with torch.no_grad():
         for i, te_data in enumerate(loader):
             gt = te_data['GT'].to(device)
             lr = te_data['LR'].to(device)
 
             bs, c, h, w = lr.size()
-            gt = gt[:, :, : h * args.scale, : w *args.scale]
+            gt = gt[:, :, : h * args.scale, : w * args.scale]
 
             output, _ = generator(lr)
 
@@ -217,21 +219,20 @@ def test(args):
             output = (output + 1.0) / 2.0
             gt = (gt + 1.0) / 2.0
 
-            output = output.transpose(1,2,0)
-            gt = gt.transpose(1,2,0)
+            output = output.transpose(1, 2, 0)
+            gt = gt.transpose(1, 2, 0)
 
             y_output = rgb2ycbcr(output)[args.scale:-args.scale, args.scale:-args.scale, :1]
             y_gt = rgb2ycbcr(gt)[args.scale:-args.scale, args.scale:-args.scale, :1]
-            
-            psnr = peak_signal_noise_ratio(y_output / 255.0, y_gt / 255.0, data_range = 1.0)
+
+            psnr = peak_signal_noise_ratio(y_output / 255.0, y_gt / 255.0, data_range=1.0)
             psnr_list.append(psnr)
             f.write('psnr : %04f \n' % psnr)
 
             result = Image.fromarray((output * 255.0).astype(np.uint8))
-            result.save('./result/res_%04d.tif'%i)
+            result.save('./result/res_%04d.tif' % i)
 
         f.write('avg psnr : %04f' % np.mean(psnr_list))
-
 
 
 def test_only(args):
@@ -245,8 +246,8 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/delft"
-    output_dir = './result/delft1'
+    original_raster_dir = r"test_data/delft3"
+    output_dir = './result/delft3'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
@@ -295,5 +296,3 @@ def test_only(args):
                     dst.write((output * 255).astype(np.uint8).transpose(2, 0, 1))  # Save as uint8
 
             print(f"Saved SR image with metadata: {output_tile_path}")
-
-

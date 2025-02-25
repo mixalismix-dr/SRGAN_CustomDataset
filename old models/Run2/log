@@ -1,0 +1,3 @@
+Pretrain 4000
+Fine tune 2000
+Patch size 24

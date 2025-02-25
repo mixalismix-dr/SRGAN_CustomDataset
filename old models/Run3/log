@@ -1,0 +1,4 @@
+4000 pre train tune epochs
+2000 Fine tune epochs
+24 patch size
+tried patch based architecture + building outlines = not good results patches are very visible

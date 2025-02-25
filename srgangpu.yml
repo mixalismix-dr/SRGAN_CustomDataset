@@ -1,0 +1,4 @@
+name: srgangpu
+channels:
+  - defaults
+prefix: C:\Users\mike_\anaconda3\envs\srgangpu
