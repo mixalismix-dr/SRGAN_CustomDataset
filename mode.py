@@ -18,6 +18,7 @@ import glob
 from rasterio.transform import Affine
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
+import logging
 
 # Tracking loss values
 pretrain_losses = []
@@ -48,6 +49,16 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
     plt.savefig(f"loss_plots/{filename}")
     plt.close()
 
+logging.basicConfig(filename="log.txt", level=logging.INFO, format="%(message)s")
+
+
+def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fine_tuning):
+    log_message = (
+        f"Fine-tuned Epoch: {fine_epoch}, Pretrained Epoch: {pre_epoch}, "
+        f"Patch Size: {patch_size}, LR Path: {LR_path}, GT Path: {GT_path}, "
+        f"Fine Tuning: {fine_tuning}\n"
+    )
+    logging.info(log_message)  # Log the message to the file
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -69,6 +80,8 @@ def train(args):
 
     pre_epoch = 0
     fine_epoch = 0
+
+    log_training_details(fine_epoch, pre_epoch, args.patch_size, args.LR_path, args.GT_path, args.fine_tuning)
 
     #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
