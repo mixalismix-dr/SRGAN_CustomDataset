@@ -153,7 +153,7 @@ def save_metrics_to_csv(category_metrics, output_metrics_file):
 
 def main():
     # Paths
-    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\delft3"
+    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\delft4"
     hr_path = r"D:\Super_Resolution\Delft\HR\real_hr\tiles_256"
     up_root_path = r"D:\Super_Resolution\Delft\HR\generated_hr_normal_upscale\tiles_256"
     output_metrics_file = "category_metrics_results_new.csv"

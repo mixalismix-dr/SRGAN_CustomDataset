@@ -279,7 +279,7 @@ def test_only(args):
 
     # Directory for original raster metadata and output
     original_raster_dir = r"test_data/delft3"
-    output_dir = './result/delft4'
+    output_dir = 'result/delft4'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically

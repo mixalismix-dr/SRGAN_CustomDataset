@@ -37,3 +37,6 @@ elif args.mode == 'test':
 elif args.mode == 'test_only':
     test_only(args)
 
+elif args.mode == 'generate':
+    generate(args)
+

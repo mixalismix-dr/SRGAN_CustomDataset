@@ -1,5 +1,6 @@
 import os
 import torch
+import imageio
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -20,6 +21,8 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 import logging
 
+from PIL import Image, ImageDraw, ImageFont
+
 # Tracking loss values
 pretrain_losses = []
 g_losses = []
@@ -29,6 +32,21 @@ epochs_finetune = []
 
 # Create a TensorBoard writer
 writer = SummaryWriter(log_dir="runs/srgan_experiment")
+
+
+def check_and_adjust_batch_size(dataset, batch_size):
+    num_samples = len(dataset)
+
+    if num_samples % batch_size != 0:
+        print(
+            f"Warning: The number of samples ({num_samples}) is not divisible by the batch size ({batch_size}). Adjusting the number of samples.")
+
+        # Adjust the number of samples to be divisible by batch size
+        adjusted_samples = (num_samples // batch_size) * batch_size
+        dataset.LR_img = dataset.LR_img[:adjusted_samples]
+        dataset.GT_img = dataset.GT_img[:adjusted_samples]
+
+        print(f"Adjusted number of samples: {adjusted_samples} (now divisible by batch size).")
 
 
 def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=None, second_label=None):
@@ -60,11 +78,14 @@ def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fi
     )
     logging.info(log_message)  # Log the message to the file
 
+
+
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     transform = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
     dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, in_memory=args.in_memory, transform=transform)
+    check_and_adjust_batch_size(dataset, args.batch_size)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num, scale=args.scale).to(device)
@@ -81,7 +102,7 @@ def train(args):
     pre_epoch = 0
     fine_epoch = 0
 
-    log_training_details(fine_epoch, pre_epoch, args.patch_size, args.LR_path, args.GT_path, args.fine_tuning)
+    log_training_details(args.fine_train_epoch, args.pre_train_epoch, args.patch_size, args.LR_path, args.GT_path, args.fine_tuning)
 
     #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
@@ -115,6 +136,7 @@ def train(args):
 
         if pre_epoch % 800 == 0:
             torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
+            generate(args)
 
     #### **Fine-Tuning Using Perceptual & Adversarial Loss**
     vgg_net = vgg19().to(device).eval()
@@ -259,8 +281,8 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/delft3"
-    output_dir = './result/delft3'
+    original_raster_dir = r"test_data/delft4"
+    output_dir = 'result/delft4'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
@@ -309,3 +331,78 @@ def test_only(args):
                     dst.write((output * 255).astype(np.uint8).transpose(2, 0, 1))  # Save as uint8
 
             print(f"Saved SR image with metadata: {output_tile_path}")
+
+def generate(args, model_dir='model', output_dir='generated_photos', gif_output_dir='progress_gifs', samples=10, model_type="pre_trained"):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dataset = testOnly_data(LR_path=args.LR_path, in_memory=False, transform=None)
+    loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
+
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(gif_output_dir, exist_ok=True)
+
+    # Get all models in the model directory
+    if model_type == "pre_trained":
+        model_files = sorted(glob.glob(os.path.join(model_dir, "pre_trained_model_*.pt")))
+    elif model_type == "SRGAN_gene":
+        model_files = sorted(glob.glob(os.path.join(model_dir, "SRGAN_gene_*.pt")))
+    else:
+        print("Invalid model type. Use 'pre_trained' or 'SRGAN_gene'.")
+        return
+
+    # Prepare dictionary to store images for each tile
+    image_paths = {f"tile_{i}": [] for i in range(samples)}  # Store paths for each tile across epochs
+
+    # Process images for each model (epoch)
+    for model_file in model_files:
+        epoch = int(model_file.split('_')[-1].replace('.pt', ''))  # Extract epoch from model filename
+        print(f"Generating images for model at epoch {epoch}")
+
+        # Load the generator model
+        generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num)
+        generator.load_state_dict(torch.load(model_file))
+        generator = generator.to(device)
+        generator.eval()
+
+        # Create a directory for the generated images of this epoch
+        epoch_output_dir = os.path.join(output_dir, f"epoch{epoch}")
+        os.makedirs(epoch_output_dir, exist_ok=True)
+
+        with torch.no_grad():
+            for i, te_data in enumerate(loader):
+                if i >= samples:  # Only process the first 10 images
+                    break
+
+                lr = te_data['LR'].to(device)
+                output, _ = generator(lr)
+                output = output[0].cpu().numpy()
+                output = (output + 1.0) / 2.0  # Rescale to [0, 1]
+                output = output.transpose(1, 2, 0)  # Rearrange dimensions for saving
+
+                # Generate filename based on tile name and epoch
+                base_name = f"tile_{i}_epoch{epoch}"
+                output_image_path = os.path.join(epoch_output_dir, f'{base_name}.png')
+
+                # Add the epoch number on the image
+                image = Image.fromarray((output * 255).astype(np.uint8))
+                # image = image.convert("RGB")  # Convert to RGB for drawing text
+                draw = ImageDraw.Draw(image)
+                font = ImageFont.load_default(size=40)  # Use default font or specify a TTF font
+                text = f"Epoch: {epoch}"
+                draw.text((10, 10), text, font=font, fill=(255, 0, 0))  # Red color for the text
+                image.save(output_image_path)
+
+                print(f"Saved generated image for epoch {epoch} to {output_image_path}")
+
+                # Store image paths by tile index for GIF creation
+                image_paths[f"tile_{i}"].append(output_image_path)
+
+    # Now create a GIF for each tile by collecting its images across different epochs
+    for tile, paths in image_paths.items():
+        paths.sort(key=lambda x: int(x.split('_')[-1].replace('epoch', ' ').replace('.png', '')))
+        gif_path = os.path.join(gif_output_dir, f'{tile}_progress.gif')
+        with imageio.get_writer(gif_path, mode='I', duration=1000, loop = 0) as writer:  # Adjust duration to 1 second
+            for image_path in paths:
+                image = Image.open(image_path)
+                writer.append_data(np.array(image))  # Append image as numpy array
+
+        print(f"GIF for {tile} saved to {gif_path}")
