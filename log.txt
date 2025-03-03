@@ -1,6 +1,4 @@
-Fine-tuned Epoch: 5, Pretrained Epoch: 10, Patch Size: 24, LR Path: custom_dataset/train_LR3_rgba, GT Path: custom_dataset/train_HR3_rgba, Fine Tuning: False
+Fine-tuned Epoch: 0, Pretrained Epoch: 0, Patch Size: 24, LR Path: custom_dataset/train_LR4, GT Path: custom_dataset/train_HR4, Fine Tuning: False
 
-Fine-tuned Epoch: 5, Pretrained Epoch: 10, Patch Size: 24, LR Path: custom_dataset/train_LR3_rgba, GT Path: custom_dataset/train_HR3_rgba, Fine Tuning: False
-
-Fine-tuned Epoch: 5, Pretrained Epoch: 10, Patch Size: 24, LR Path: custom_dataset/train_LR3_rgba, GT Path: custom_dataset/train_HR3_rgba, Fine Tuning: False
+Fine-tuned Epoch: 0, Pretrained Epoch: 0, Patch Size: 24, LR Path: custom_dataset/train_LR4, GT Path: custom_dataset/train_HR4, Fine Tuning: False
 
