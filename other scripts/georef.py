@@ -3,9 +3,9 @@ from rasterio.io import MemoryFile
 from rasterio import Affine
 
 # Paths to the files
-original_tif = r"D:\Super_Resolution\Delft\LR\vrt\tiles_64x64\tile_116_754.tif"
-non_georef_tif = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\res_0000.tif"
-georef_output_tif = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\geores_0000.tif"
+original_tif = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\custom_dataset\train_HR1\tile_0_0.tif"
+non_georef_tif = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\output_rgba_image.tif"
+georef_output_tif = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\output_rgba_image_geo.tif"
 
 # Read georeferencing from the original file
 with rasterio.open(original_tif) as src:
@@ -25,6 +25,8 @@ with rasterio.open(non_georef_tif) as src_sr:
         "crs": crs,
         "height": src_sr.height,
         "width": src_sr.width,
+        "count": 4,
+        "nodata": None
 
     })
 

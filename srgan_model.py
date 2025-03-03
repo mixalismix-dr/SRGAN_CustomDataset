@@ -5,7 +5,7 @@ from ops import *
 
 class Generator(nn.Module):
     
-    def __init__(self, img_feat = 3, n_feats = 64, kernel_size = 3, num_block = 16, act = nn.PReLU(), scale=4):
+    def __init__(self, img_feat = 3, n_feats = 64, kernel_size = 3, num_block = 32, act = nn.PReLU(), scale=4):
         super(Generator, self).__init__()
         
         self.conv01 = conv(in_channel = img_feat, out_channel = n_feats, kernel_size = 9, BN = False, act = act)
