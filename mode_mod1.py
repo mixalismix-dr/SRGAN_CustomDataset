@@ -135,7 +135,7 @@ def train(args):
             plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png")
 
         if pre_epoch % 800 == 0:
-            torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
+            torch.save(generator.state_dict(), f'./model_mod1/pre_trained_model_{pre_epoch}.pt')
             generate(args)
 
     #### **Fine-Tuning Using Perceptual & Adversarial Loss**
@@ -214,8 +214,8 @@ def train(args):
                       second_losses=d_losses, second_label="Discriminator Loss")
 
         if fine_epoch % 500 == 0:
-            torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
-            torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
+            torch.save(generator.state_dict(), f'./model_mod1/SRGAN_gene_{fine_epoch}.pt')
+            torch.save(discriminator.state_dict(), f'./model_mod1/SRGAN_discrim_{fine_epoch}.pt')
 
 
 writer.close()
@@ -332,7 +332,7 @@ def test_only(args):
 
             print(f"Saved SR image with metadata: {output_tile_path}")
 
-def generate(args, model_dir='model', output_dir='generated_photos', gif_output_dir='progress_gifs', samples=10, model_type="pre_trained"):
+def generate(args, model_dir='model', output_dir='generated_photos', gif_output_dir='progress_gifs_mod1', samples=10, model_type="pre_trained"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = testOnly_data(LR_path=args.LR_path, in_memory=False, transform=None)
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
