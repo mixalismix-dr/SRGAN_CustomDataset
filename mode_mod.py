@@ -140,6 +140,7 @@ def train(args):
             d_optim.zero_grad()
             d_loss.backward()
             d_optim.step()
+            optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
             ## **Training Generator**
             output, _ = generator(lr)
