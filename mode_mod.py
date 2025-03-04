@@ -150,12 +150,6 @@ def train(args):
                 output, _ = generator(lr)
                 fake_prob = discriminator(output)
 
-                output_mask = output[:, 3, :, :]
-                gt_mask = gt[:, 3, :, :]
-
-
-
-
                 # Slice only the RGB part for VGG perceptual loss
                 gt_rgb = (gt[:, :3, :, :] + 1.0) / 2.0
                 output_rgb = (output[:, :3, :, :] + 1.0) / 2.0
@@ -190,7 +184,7 @@ def train(args):
             epochs_finetune.append(fine_epoch)
             fine_epoch += 1
 
-            if fine_epoch % 2 == 0:
+            if fine_epoch % 50 == 0:
                 print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
                 plot_loss(epochs_finetune, g_losses, "Generator Loss", "Loss", "gan_losses.png",
                           second_losses=d_losses, second_label="Discriminator Loss")
