@@ -79,7 +79,7 @@ def train(args):
                 lr = tr_data['LR'].to(device)
 
                 output, _ = generator(lr)
-                loss = l2_loss(output, gt)
+                loss = l2_loss(gt, output)
 
                 g_optim.zero_grad()
                 loss.backward()
@@ -88,6 +88,8 @@ def train(args):
 
                 epoch_loss += loss.item()
 
+            pretrain_losses.append(epoch_loss / len(loader))
+            epochs_pretrain.append(pre_epoch)
             avg_l2_loss = epoch_loss / len(loader)
             writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)
             pretrain_losses.append(avg_l2_loss)
@@ -167,8 +169,6 @@ def train(args):
                 g_loss.backward()
                 g_optim.step()
                 optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
-
-
 
                 epoch_g_loss += g_loss.item()
                 epoch_d_loss += d_loss.item()
