@@ -332,7 +332,7 @@ def test_only(args):
 
             print(f"Saved SR image with metadata: {output_tile_path}")
 
-def generate(args, model_dir='model', output_dir='generated_photos_mod1', gif_output_dir='progress_gifs_mod1', samples=10, model_type="pre_trained"):
+def generate(args, model_dir='model_mod1', output_dir='generated_photos_mod1', gif_output_dir='progress_gifs_mod1', samples=10, model_type="pre_trained"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = testOnly_data(LR_path=args.LR_path, in_memory=False, transform=None)
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
