@@ -144,6 +144,14 @@ def train(args):
             output, _ = generator(lr)
             fake_prob = discriminator(output)
 
+            output_mask = output[:, 3, :, :]
+            gt_mask = gt[:, 3, :, :]
+
+            mask_loss = l2_loss(output_mask, gt_mask)
+
+            mask_loss_weight = 1.0
+
+
             # Slice only the RGB part for VGG perceptual loss
             gt_rgb = (gt[:, :3, :, :] + 1.0) / 2.0
             output_rgb = (output[:, :3, :, :] + 1.0) / 2.0
@@ -155,7 +163,7 @@ def train(args):
             adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
             total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
 
-            g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
+            g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value + mask_loss_weight*mask_loss
 
             g_optim.zero_grad()
             g_loss.backward()
@@ -249,64 +257,77 @@ def test_only(args):
     generator = generator.to(device)
     generator.eval()
 
-    # Directory for original raster metadata and output
     original_raster_dir = r"test_data/delft3"
     output_dir = 'result/delft4'
     os.makedirs(output_dir, exist_ok=True)
 
-    # Get all original raster files dynamically
     raster_files = glob.glob(os.path.join(original_raster_dir, "tile_*.tif"))
-    raster_files.sort()  # Sort the files alphabetically (important for consistency)
+    raster_files.sort()
 
-    # Iterate through the LR tiles and generate SR images
     with torch.no_grad():
         for i, te_data in enumerate(loader):
-            # Dynamically match the corresponding original raster
             if i >= len(raster_files):
                 print(f"No corresponding raster for index {i}. Skipping...")
                 continue
 
             original_raster = raster_files[i]
-            base_name = os.path.basename(original_raster).replace(".tif", "")  # Extract base name without extension
+            base_name = os.path.basename(original_raster).replace(".tif", "")
             output_tile_path = os.path.join(output_dir, f"res_{base_name}.tif")
+            mask_tile_path = os.path.join(output_dir, f"mask_{base_name}.tif")
 
-            # Get metadata from the original raster
             with rasterio.open(original_raster) as src:
-                transform = src.transform  # Get the original affine transform
-                crs = src.crs  # Get the CRS
-                profile = src.profile  # Get raster profile
+                transform = src.transform
+                crs = src.crs
+                profile = src.profile
 
-                # Generate SR output
                 lr = te_data['LR'].to(device)
                 mask = te_data['mask_lr'].to(device)
-                mask_lr = mask.cpu().numpy()  # Convert tensor to NumPy array
-                mask_lr = mask_lr[0, 0]  # Remove the extra dimensions (if any)
-                mask_lr = Image.fromarray(mask_lr).resize((64, 64), Image.BILINEAR)  # Resize the mask
-                mask_lr = np.expand_dims(np.array(mask_lr), axis=0)  # Add back the extra dimension
-                mask_lr = torch.tensor(mask_lr).to(device)  # Convert back to tensor
-                mask_lr = mask_lr.unsqueeze(0)
+                mask_lr = mask.cpu().numpy()[0, 0]
+                mask_lr = Image.fromarray(mask_lr).resize((64, 64), Image.BILINEAR)
+                mask_lr = np.expand_dims(np.array(mask_lr), axis=0)
+                mask_lr = torch.tensor(mask_lr).to(device).unsqueeze(0)
 
                 input_data = torch.cat((lr, mask_lr), dim=1)  # Concatenate LR and mask for generator input
                 output, _ = generator(input_data)  # Pass to the generator
 
                 output = output[0].cpu().numpy()
-                output = (output + 1.0) / 2.0  # Rescale to [0, 1]
-                output = output.transpose(1, 2, 0)  # Rearrange dimensions for saving
+                output = (output + 1.0) / 2.0
+                output = output.transpose(1, 2, 0)
 
-                # Update profile to match the SR resolution and output data
-                profile.update({
+                output_rgb = output[:, :, :3]  # RGB bands
+                output_mask = output[:, :, 3]  # Mask band
+
+                # Save RGB image
+                rgb_profile = profile.copy()
+                rgb_profile.update({
                     "height": output.shape[0],
                     "width": output.shape[1],
                     "transform": Affine(
                         transform.a / args.scale, transform.b, transform.c,
                         transform.d, transform.e / args.scale, transform.f
-                    ),  # Adjust affine for scaling
+                    ),
                     "dtype": "uint8",
-                    "count": output.shape[2],  # Number of bands (e.g., RGB = 3)
+                    "count": 3,
                 })
 
-                # Write SR output as a GeoTIFF
-                with rasterio.open(output_tile_path, "w", **profile) as dst:
-                    dst.write((output * 255).astype(np.uint8).transpose(2, 0, 1))  # Save as uint8
+                with rasterio.open(output_tile_path, "w", **rgb_profile) as dst:
+                    dst.write((output_rgb * 255).astype(np.uint8).transpose(2, 0, 1))
 
-            print(f"Saved SR image with metadata: {output_tile_path}")
+                # Save mask image
+                mask_profile = profile.copy()
+                mask_profile.update({
+                    "height": output.shape[0],
+                    "width": output.shape[1],
+                    "transform": Affine(
+                        transform.a / args.scale, transform.b, transform.c,
+                        transform.d, transform.e / args.scale, transform.f
+                    ),
+                    "dtype": "uint8",
+                    "count": 1,
+                })
+
+                with rasterio.open(mask_tile_path, "w", **mask_profile) as dst:
+                    dst.write((output_mask * 255).astype(np.uint8), 1)
+
+            print(f"Saved SR image: {output_tile_path}")
+            print(f"Saved SR mask: {mask_tile_path}")
