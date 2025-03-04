@@ -18,6 +18,7 @@ import glob
 from rasterio.transform import Affine
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
+import traceback
 
 # Tracking loss values
 pretrain_losses = []
@@ -48,161 +49,168 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
     plt.close()
 
 def train(args):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    transform = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
-    dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, mask_path=args.mask_path, in_memory=args.in_memory, transform=transform)
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    try:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    generator = Generator(img_feat=4, n_feats=64, kernel_size=3, num_block=args.res_num, scale=args.scale).to(device)
+        transform = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
+        dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, mask_path=args.mask_path, in_memory=args.in_memory, transform=transform)
+        loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    if args.fine_tuning:
-        generator.load_state_dict(torch.load(args.generator_path))
-        print("Pre-trained model loaded:", args.generator_path)
+        generator = Generator(img_feat=4, n_feats=64, kernel_size=3, num_block=args.res_num, scale=args.scale).to(device)
 
-    generator.train()
+        if args.fine_tuning:
+            generator.load_state_dict(torch.load(args.generator_path))
+            print("Pre-trained model loaded:", args.generator_path)
 
-    l2_loss = nn.MSELoss()
-    g_optim = optim.Adam(generator.parameters(), lr=1e-4)
+        generator.train()
 
-    pre_epoch = 0
-    fine_epoch = 0
-    epoch_mask_loss = 0
+        l2_loss = nn.MSELoss()
+        g_optim = optim.Adam(generator.parameters(), lr=1e-4)
 
-    #### **Pre-Training Using L2 Loss**
-    while pre_epoch < args.pre_train_epoch:
-        epoch_loss = 0
-        for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch}/{args.pre_train_epoch}"):
-            gt = tr_data['GT'].to(device)
-            lr = tr_data['LR'].to(device)
+        pre_epoch = 0
+        fine_epoch = 0
 
-            output, _ = generator(lr)
-            loss = l2_loss(output, gt)
+        #### **Pre-Training Using L2 Loss**
+        while pre_epoch < args.pre_train_epoch:
+            epoch_loss = 0
+            for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch}/{args.pre_train_epoch}"):
+                gt = tr_data['GT'].to(device)
+                lr = tr_data['LR'].to(device)
 
-            g_optim.zero_grad()
-            loss.backward()
-            g_optim.step()
-            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+                output, _ = generator(lr)
+                loss = l2_loss(output, gt)
 
-            epoch_loss += loss.item()
+                g_optim.zero_grad()
+                loss.backward()
+                g_optim.step()
+                optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
-        avg_l2_loss = epoch_loss / len(loader)
-        writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)
-        pretrain_losses.append(avg_l2_loss)
-        epochs_pretrain.append(pre_epoch)
+                epoch_loss += loss.item()
 
-        pre_epoch += 1
+            avg_l2_loss = epoch_loss / len(loader)
+            writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)
+            pretrain_losses.append(avg_l2_loss)
+            epochs_pretrain.append(pre_epoch)
 
-        if pre_epoch % 50 == 0:
-            print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}")
-            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png")
+            pre_epoch += 1
 
-        if pre_epoch % 800 == 0:
-            torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
+            if pre_epoch % 50 == 0:
+                print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}")
+                plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png")
 
-    #### **Fine-Tuning Using Perceptual & Adversarial Loss**
-    vgg_net = vgg19().to(device).eval()
-    discriminator = Discriminator(patch_size=args.patch_size * args.scale).to(device).train()
+            if pre_epoch % 800 == 0:
+                torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
 
-    d_optim = optim.Adam(discriminator.parameters(), lr=1e-4)
-    scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+        #### **Fine-Tuning Using Perceptual & Adversarial Loss**
+        vgg_net = vgg19().to(device).eval()
+        discriminator = Discriminator(patch_size=args.patch_size * args.scale).to(device).train()
 
-    VGG_loss = perceptual_loss(vgg_net)
-    cross_ent = nn.BCELoss()
-    tv_loss = TVLoss()
+        d_optim = optim.Adam(discriminator.parameters(), lr=1e-4)
+        scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
-    real_label = torch.ones((args.batch_size, 1)).to(device)
-    fake_label = torch.zeros((args.batch_size, 1)).to(device)
+        VGG_loss = perceptual_loss(vgg_net)
+        cross_ent = nn.BCELoss()
+        tv_loss = TVLoss()
 
-    while fine_epoch < args.fine_train_epoch:
-        scheduler.step()
+        real_label = torch.ones((args.batch_size, 1)).to(device)
+        fake_label = torch.zeros((args.batch_size, 1)).to(device)
 
-        epoch_g_loss = 0
-        epoch_d_loss = 0
+        while fine_epoch < args.fine_train_epoch:
+            scheduler.step()
 
-        for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch}/{args.fine_train_epoch}"):
-            gt = tr_data['GT'].to(device)
-            lr = tr_data['LR'].to(device)
+            epoch_g_loss = 0
+            epoch_d_loss = 0
 
-
-
-            ## **Training Discriminator**
-            # For the generator (train with both lr and mask_lr):
-            output, _ = generator(lr)  # Pass to the generator
-            fake_prob = discriminator(output)
-            real_prob = discriminator(gt)
-
-            real_label = torch.ones_like(real_prob).to(device)
-            fake_label = torch.zeros_like(fake_prob).to(device)
-
-            d_loss_real = cross_ent(real_prob, real_label)
-            d_loss_fake = cross_ent(fake_prob, fake_label)
-            d_loss = d_loss_real + d_loss_fake
-
-            d_optim.zero_grad()
-            d_loss.backward()
-            d_optim.step()
-            optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
-
-            ## **Training Generator**
-            output, _ = generator(lr)
-            fake_prob = discriminator(output)
-
-            output_mask = output[:, 3, :, :]
-            gt_mask = gt[:, 3, :, :]
-
-            mask_loss = l2_loss(output_mask, gt_mask)
-
-            mask_loss_weight = 1.0
-
-
-            # Slice only the RGB part for VGG perceptual loss
-            gt_rgb = (gt[:, :3, :, :] + 1.0) / 2.0
-            output_rgb = (output[:, :3, :, :] + 1.0) / 2.0
-
-            _percep_loss, hr_feat, sr_feat = VGG_loss(gt_rgb, output_rgb, layer=args.feat_layer)
-
-            l2_loss_value = l2_loss(output, gt)
-            percep_loss = args.vgg_rescale_coeff * _percep_loss
-            adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
-            total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
-
-            g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value + mask_loss_weight*mask_loss
-
-            g_optim.zero_grad()
-            g_loss.backward()
-            g_optim.step()
-            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+            for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch}/{args.fine_train_epoch}"):
+                gt = tr_data['GT'].to(device)
+                lr = tr_data['LR'].to(device)
 
 
 
-            epoch_g_loss += g_loss.item()
-            epoch_d_loss += d_loss.item()
-            epoch_mask_loss += mask_loss.item()
+                ## **Training Discriminator**
+                # For the generator (train with both lr and mask_lr):
+                output, _ = generator(lr)  # Pass to the generator
+                fake_prob = discriminator(output)
+                real_prob = discriminator(gt)
 
-        avg_g_loss = epoch_g_loss / len(loader)
-        avg_d_loss = epoch_d_loss / len(loader)
-        avg_mask_loss = epoch_mask_loss / len(loader)
+                real_label = torch.ones_like(real_prob).to(device)
+                fake_label = torch.zeros_like(fake_prob).to(device)
 
-        writer.add_scalar("Loss/Mask_Loss", avg_mask_loss, fine_epoch)  # Log Mask loss
-        writer.add_scalar("Loss/Generator_Loss", avg_g_loss, fine_epoch)  # Log Generator loss
-        writer.add_scalar("Loss/Discriminator_Loss", avg_d_loss, fine_epoch)  # Log Discriminator loss
+                d_loss_real = cross_ent(real_prob, real_label)
+                d_loss_fake = cross_ent(fake_prob, fake_label)
+                d_loss = d_loss_real + d_loss_fake
 
-        g_losses.append(epoch_g_loss / len(loader))
-        d_losses.append(epoch_d_loss / len(loader))
-        epochs_finetune.append(fine_epoch)
-        fine_epoch += 1
+                d_optim.zero_grad()
+                d_loss.backward()
+                d_optim.step()
+                optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
-        if fine_epoch % 50 == 0:
-            print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}, Mask Loss: {avg_mask_loss:.6f}")
-            plot_loss(epochs_finetune, g_losses, "Generator Loss", "Loss", "gan_losses.png",
-                      second_losses=d_losses, second_label="Discriminator Loss")
+                ## **Training Generator**
+                output, _ = generator(lr)
+                fake_prob = discriminator(output)
 
-        if fine_epoch % 500 == 0:
-            torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
-            torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
+                output_mask = output[:, 3, :, :]
+                gt_mask = gt[:, 3, :, :]
 
-    writer.close()
+
+
+
+                # Slice only the RGB part for VGG perceptual loss
+                gt_rgb = (gt[:, :3, :, :] + 1.0) / 2.0
+                output_rgb = (output[:, :3, :, :] + 1.0) / 2.0
+
+                _percep_loss, hr_feat, sr_feat = VGG_loss(gt_rgb, output_rgb, layer=args.feat_layer)
+
+                l2_loss_value = l2_loss(output, gt)
+                percep_loss = args.vgg_rescale_coeff * _percep_loss
+                adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
+                total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
+
+                g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
+
+                g_optim.zero_grad()
+                g_loss.backward()
+                g_optim.step()
+                optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+
+
+
+                epoch_g_loss += g_loss.item()
+                epoch_d_loss += d_loss.item()
+
+            avg_g_loss = epoch_g_loss / len(loader)
+            avg_d_loss = epoch_d_loss / len(loader)
+
+            writer.add_scalar("Loss/Generator_Loss", avg_g_loss, fine_epoch)  # Log Generator loss
+            writer.add_scalar("Loss/Discriminator_Loss", avg_d_loss, fine_epoch)  # Log Discriminator loss
+
+            g_losses.append(epoch_g_loss / len(loader))
+            d_losses.append(epoch_d_loss / len(loader))
+            epochs_finetune.append(fine_epoch)
+            fine_epoch += 1
+
+            if fine_epoch % 2 == 0:
+                print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
+                plot_loss(epochs_finetune, g_losses, "Generator Loss", "Loss", "gan_losses.png",
+                          second_losses=d_losses, second_label="Discriminator Loss")
+
+            if fine_epoch % 500 == 0:
+                torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
+                torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
+
+        writer.close()
+
+
+    except Exception as e:
+
+        with open("error_log.txt", "a") as f:
+
+            f.write(f"\nError during training at fine_epoch {fine_epoch}:\n")
+
+            f.write(traceback.format_exc())
+
+        print(f"An error occurred. Check error_log.txt for details.")
 
 def test(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
