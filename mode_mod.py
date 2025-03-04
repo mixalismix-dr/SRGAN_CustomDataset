@@ -113,6 +113,7 @@ def train(args):
     fake_label = torch.zeros((args.batch_size, 1)).to(device)
 
     while fine_epoch < args.fine_train_epoch:
+        scheduler.step()
 
         epoch_g_loss = 0
         epoch_d_loss = 0
@@ -183,7 +184,6 @@ def train(args):
         d_losses.append(epoch_d_loss / len(loader))
         epochs_finetune.append(fine_epoch)
         fine_epoch += 1
-        scheduler.step()
 
         if fine_epoch % 50 == 0:
             print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
