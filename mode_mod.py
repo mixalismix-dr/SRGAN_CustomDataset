@@ -29,7 +29,6 @@ epochs_finetune = []
 # Create a TensorBoard writer
 writer = SummaryWriter(log_dir="runs/srgan_experiment")
 
-
 def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=None, second_label=None):
     os.makedirs("loss_plots", exist_ok=True)
     plt.figure(figsize=(10, 5))
@@ -47,7 +46,6 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
     plt.legend()
     plt.savefig(f"loss_plots/{filename}")
     plt.close()
-
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -74,29 +72,20 @@ def train(args):
     while pre_epoch < args.pre_train_epoch:
         epoch_loss = 0
         for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch}/{args.pre_train_epoch}"):
-            # print("Batch keys:", tr_data.keys())
-
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
-            mask_lr = tr_data['mask_lr'].to(device)
 
-            input_data = torch.cat((lr, mask_lr), dim=1)
-            # print(input_data.shape)
-
-            output, _ = generator(input_data)
+            output, _ = generator(lr)
             loss = l2_loss(output, gt)
 
             g_optim.zero_grad()
             loss.backward()
             g_optim.step()
-            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
             epoch_loss += loss.item()
 
-        pretrain_losses.append(epoch_loss / len(loader))
-        epochs_pretrain.append(pre_epoch)
         avg_l2_loss = epoch_loss / len(loader)
-        writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)  # Log L2 loss
+        writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)
         pretrain_losses.append(avg_l2_loss)
         epochs_pretrain.append(pre_epoch)
 
@@ -124,7 +113,6 @@ def train(args):
     fake_label = torch.zeros((args.batch_size, 1)).to(device)
 
     while fine_epoch < args.fine_train_epoch:
-        scheduler.step()
 
         epoch_g_loss = 0
         epoch_d_loss = 0
@@ -132,30 +120,17 @@ def train(args):
         for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch}/{args.fine_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
-            mask_lr = tr_data['mask_lr'].to(device)
-            mask_hr = tr_data['mask_hr'].to(device)
-            # print(lr.shape)
 
 
 
             ## **Training Discriminator**
             # For the generator (train with both lr and mask_lr):
-            input_data = torch.cat((lr, mask_lr), dim=1)  # Concatenate LR and mask for generator input
-            output, _ = generator(input_data)  # Pass to the generator
+            output, _ = generator(lr)  # Pass to the generator
+            fake_prob = discriminator(output)
+            real_prob = discriminator(gt)
 
-            # For the discriminator (train with only the RGB part):
-            input_discriminator = torch.cat((output, mask_hr), dim=1)  # Pass generated image and mask to discriminator
-            # Discriminator expects only 3 channels, so slice out the RGB part
-            input_discriminator_rgb = input_discriminator[:, :3, :, :]  # Keep only the first 3 channels (RGB)
-            real_prob = discriminator(input_discriminator_rgb)  # Real image with the mask
-            real_prob = real_prob.mean(dim=[2, 3])  # Average over height and width
-
-            fake_prob = discriminator(input_discriminator_rgb)  # Fake image with the mask
-            fake_prob = fake_prob.mean(dim=[2, 3])  # Average over height and width
-
-            # print(f"Output shape: {fake_prob.shape}, Label shape: {fake_label.shape}")
-            # print(f"Output min/max: {fake_prob.min()}, {fake_prob.max()}")
-            # print(f"Label min/max: {fake_label.min()}, {fake_label.max()}")
+            real_label = torch.ones_like(real_prob).to(device)
+            fake_label = torch.zeros_like(fake_prob).to(device)
 
             d_loss_real = cross_ent(real_prob, real_label)
             d_loss_fake = cross_ent(fake_prob, fake_label)
@@ -164,15 +139,16 @@ def train(args):
             d_optim.zero_grad()
             d_loss.backward()
             d_optim.step()
-            optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
             ## **Training Generator**
-            output, _ = generator(input_data)
+            output, _ = generator(lr)
             fake_prob = discriminator(output)
 
-            fake_prob = fake_prob.mean(dim=[2, 3])  # Reduce the spatial dimensions
+            # Slice only the RGB part for VGG perceptual loss
+            gt_rgb = (gt[:, :3, :, :] + 1.0) / 2.0
+            output_rgb = (output[:, :3, :, :] + 1.0) / 2.0
 
-            _percep_loss, hr_feat, sr_feat = VGG_loss((gt + 1.0) / 2.0, (output + 1.0) / 2.0, layer=args.feat_layer)
+            _percep_loss, hr_feat, sr_feat = VGG_loss(gt_rgb, output_rgb, layer=args.feat_layer)
 
             l2_loss_value = l2_loss(output, gt)
             percep_loss = args.vgg_rescale_coeff * _percep_loss
@@ -184,7 +160,8 @@ def train(args):
             g_optim.zero_grad()
             g_loss.backward()
             g_optim.step()
-            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+
+            scheduler.step()
 
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
@@ -209,11 +186,7 @@ def train(args):
             torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
             torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
 
-
-writer.close()
-
-
-# In[ ]:
+    writer.close()
 
 def test(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -261,7 +234,6 @@ def test(args):
 
         f.write('avg psnr : %04f' % np.mean(psnr_list))
 
-
 def test_only(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = testOnly_data(
@@ -307,7 +279,6 @@ def test_only(args):
                 # Generate SR output
                 lr = te_data['LR'].to(device)
                 mask = te_data['mask_lr'].to(device)
-                # Convert the mask to NumPy array, remove the extra dimension (if any), and resize it.
                 mask_lr = mask.cpu().numpy()  # Convert tensor to NumPy array
                 mask_lr = mask_lr[0, 0]  # Remove the extra dimensions (if any)
                 mask_lr = Image.fromarray(mask_lr).resize((64, 64), Image.BILINEAR)  # Resize the mask

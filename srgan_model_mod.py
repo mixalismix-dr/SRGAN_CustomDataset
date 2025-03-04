@@ -22,7 +22,7 @@ class Generator(nn.Module):
 
         self.tail = nn.Sequential(*upsample_blocks)
         
-        self.last_conv = conv(in_channel = n_feats, out_channel = 3, kernel_size = 3, BN = False, act = nn.Tanh())
+        self.last_conv = conv(in_channel = n_feats, out_channel = 4, kernel_size = 3, BN = False, act = nn.Tanh())
         
     def forward(self, x):
         
@@ -40,7 +40,7 @@ class Generator(nn.Module):
     
 class Discriminator(nn.Module):
     
-    def __init__(self, img_feat = 3, n_feats = 64, kernel_size = 3, act = nn.LeakyReLU(inplace = True), num_of_block = 3, patch_size = 96):
+    def __init__(self, img_feat = 4, n_feats = 64, kernel_size = 3, act = nn.LeakyReLU(inplace = True), num_of_block = 3, patch_size = 96):
         super(Discriminator, self).__init__()
         self.act = act
         

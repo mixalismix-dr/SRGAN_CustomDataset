@@ -58,6 +58,10 @@ class mydata(Dataset):
         mask_hr = np.expand_dims(mask, axis=-1)  # Shape: (256, 256, 1)
         mask_lr = np.expand_dims(mask_lr, axis=-1)  # Shape: (64, 64, 1)
 
+        LR = np.concatenate((LR, mask_lr), axis=-1)
+        GT = np.concatenate((GT, mask_hr), axis=-1)
+
+
         # print("MASKS SHAPE", mask_hr.shape, mask_lr.shape)
         # print("GT LR Shapes", GT.shape, LR.shape)
 

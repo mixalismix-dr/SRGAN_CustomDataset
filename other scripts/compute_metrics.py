@@ -45,8 +45,11 @@ def compute_metrics(hr_array, sr_array, up_array):
     psnr_up = peak_signal_noise_ratio(y_hr, y_up, data_range=255.0)
 
     # Compute SSIM
-    ssim_sr = structural_similarity(y_hr, y_sr, data_range=255.0)
-    ssim_up = structural_similarity(y_hr, y_up, data_range=255.0)
+    edges_sr = cv2.Canny(y_sr.astype(np.uint8), 100, 200)
+    edges_up = cv2.Canny(y_up.astype(np.uint8), 100, 200)
+    edges_hr = cv2.Canny(y_hr.astype(np.uint8), 100, 200)
+    ssim_sr = structural_similarity(edges_sr, edges_hr, data_range=255.0)
+    ssim_up = structural_similarity(edges_hr, edges_up, data_range=255.0)
 
     # Compute BRISQUE
     brisque_sr = cv2.quality.QualityBRISQUE_compute(sr_array, "brisque_model_live.yml", "brisque_range_live.yml")
