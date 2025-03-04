@@ -185,7 +185,6 @@ def train(args):
         fine_epoch += 1
         scheduler.step()
 
-
         if fine_epoch % 50 == 0:
             print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
             plot_loss(epochs_finetune, g_losses, "Generator Loss", "Loss", "gan_losses.png",
