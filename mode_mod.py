@@ -169,7 +169,6 @@ def train(args):
             g_loss.backward()
             g_optim.step()
 
-            scheduler.step()
 
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
@@ -184,6 +183,8 @@ def train(args):
         d_losses.append(epoch_d_loss / len(loader))
         epochs_finetune.append(fine_epoch)
         fine_epoch += 1
+        scheduler.step()
+
 
         if fine_epoch % 50 == 0:
             print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
