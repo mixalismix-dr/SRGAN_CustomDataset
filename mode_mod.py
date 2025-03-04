@@ -67,6 +67,7 @@ def train(args):
 
     pre_epoch = 0
     fine_epoch = 0
+    epoch_mask_loss = 0
 
     #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
@@ -81,6 +82,7 @@ def train(args):
             g_optim.zero_grad()
             loss.backward()
             g_optim.step()
+            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
             epoch_loss += loss.item()
 
@@ -170,14 +172,19 @@ def train(args):
             g_optim.zero_grad()
             g_loss.backward()
             g_optim.step()
+            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+
 
 
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
+            epoch_mask_loss += mask_loss.item()
 
         avg_g_loss = epoch_g_loss / len(loader)
         avg_d_loss = epoch_d_loss / len(loader)
+        avg_mask_loss = epoch_mask_loss / len(loader)
 
+        writer.add_scalar("Loss/Mask_Loss", avg_mask_loss, fine_epoch)  # Log Mask loss
         writer.add_scalar("Loss/Generator_Loss", avg_g_loss, fine_epoch)  # Log Generator loss
         writer.add_scalar("Loss/Discriminator_Loss", avg_d_loss, fine_epoch)  # Log Discriminator loss
 
@@ -187,7 +194,7 @@ def train(args):
         fine_epoch += 1
 
         if fine_epoch % 50 == 0:
-            print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
+            print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}, Mask Loss: {avg_mask_loss:.6f}")
             plot_loss(epochs_finetune, g_losses, "Generator Loss", "Loss", "gan_losses.png",
                       second_losses=d_losses, second_label="Discriminator Loss")
 
