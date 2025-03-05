@@ -47,4 +47,4 @@ with rasterio.open(input_file) as src:
 
             tile_count += 1
 
-print(f"✅ Tiling completed. {tile_count} tiles saved in '{output_dir}'.")
+print(f"Tiling completed. {tile_count} tiles saved in '{output_dir}'.")
