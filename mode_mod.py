@@ -84,9 +84,10 @@ def train(args):
                 g_optim.zero_grad()
                 loss.backward()
                 g_optim.step()
-                optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
                 epoch_loss += loss.item()
+
+            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
             pretrain_losses.append(epoch_loss / len(loader))
             epochs_pretrain.append(pre_epoch)
@@ -146,7 +147,7 @@ def train(args):
                 d_optim.zero_grad()
                 d_loss.backward()
                 d_optim.step()
-                optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
+                # optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
                 ## **Training Generator**
                 output, _ = generator(lr)
@@ -168,10 +169,12 @@ def train(args):
                 g_optim.zero_grad()
                 g_loss.backward()
                 g_optim.step()
-                optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+                # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
                 epoch_g_loss += g_loss.item()
                 epoch_d_loss += d_loss.item()
+
+            optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
             avg_g_loss = epoch_g_loss / len(loader)
             avg_d_loss = epoch_d_loss / len(loader)

@@ -10,6 +10,7 @@ import torch
 import lpips
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"is cuda available: {torch.cuda.is_available()}")
 lpips_fn = lpips.LPIPS(net='vgg').to(device)
 
 def compute_lpips(hr_array, sr_array):
@@ -18,32 +19,6 @@ def compute_lpips(hr_array, sr_array):
     hr_tensor = hr_tensor * 2 - 1
     sr_tensor = sr_tensor * 2 - 1
     return lpips_fn(sr_tensor, hr_tensor).item()
-
-def compute_blur(image_path):
-    """Compute blur score using variance of Laplacian."""
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        raise ValueError(f"Unable to read image: {image_path}")
-
-    return cv2.Laplacian(img, cv2.CV_64F).var()
-
-def compute_AG(image_path):
-    """Compute Average Gradient (AG) of an image."""
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    if img is None:
-        raise ValueError(f"Unable to read image: {image_path}")
-
-    # Compute gradients using Sobel operator
-    grad_x = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
-    grad_y = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
-
-    # Compute gradient magnitude
-    gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-
-    # Compute average gradient (AG)
-    ag = np.mean(gradient_magnitude)
-    return ag
-
 
 def compute_metrics(hr_array, sr_array, up_array):
     """Compute PSNR, SSIM, and BRISQUE metrics for SR and UP images."""
@@ -64,15 +39,8 @@ def compute_metrics(hr_array, sr_array, up_array):
     ssim_sr = structural_similarity(edges_sr, edges_hr, data_range=255.0)
     ssim_up = structural_similarity(edges_hr, edges_up, data_range=255.0)
 
-    # Compute BRISQUE
-    brisque_sr = cv2.quality.QualityBRISQUE_compute(sr_array, "brisque_model_live.yml", "brisque_range_live.yml")
-    brisque_up = cv2.quality.QualityBRISQUE_compute(up_array, "brisque_model_live.yml", "brisque_range_live.yml")
 
-    # Compute RMSE
-    rmse_sr = np.sqrt(mean_squared_error(y_hr, y_sr))
-    rmse_up = np.sqrt(mean_squared_error(y_hr, y_up))
-
-    return psnr_sr, psnr_up, ssim_sr, ssim_up, brisque_sr, brisque_up, rmse_up, rmse_sr
+    return psnr_sr, psnr_up, ssim_sr, ssim_up
 
 
 def process_category(category_dir, sr_path, up_root_path):
@@ -82,10 +50,7 @@ def process_category(category_dir, sr_path, up_root_path):
     lpips_sr_values, lpips_up_values = [], []
     psnr_sr_values, psnr_up_values = [], []
     ssim_sr_values, ssim_up_values = [], []
-    brisque_sr_values, brisque_up_values = [], []
-    ag_sr_values, ag_up_values, ag_hr_values = [], [], []
-    blur_sr_values, blur_up_values, blur_hr_values = [], [], []
-    rmse_sr_values, rmse_up_values = [], []
+
 
     for hr_img in tqdm(hr_images, total=len(hr_images), desc=f"Processing {os.path.basename(category_dir)}"):
         tile_name = os.path.basename(hr_img).replace(".tif", "")
@@ -95,7 +60,6 @@ def process_category(category_dir, sr_path, up_root_path):
         up_candidates = glob.glob(os.path.join(up_root_path, "**", f"{tile_name}_down_up.tif"), recursive=True)
 
         if not sr_candidates or not up_candidates:
-            print(f"Warning: No SR/UP image found for {tile_name}, skipping...")
             continue
 
         sr_img = sr_candidates[0]
@@ -111,16 +75,8 @@ def process_category(category_dir, sr_path, up_root_path):
             continue
 
         # Compute metrics
-        psnr_sr, psnr_up, ssim_sr, ssim_up, brisque_sr, brisque_up, rmse_up, rmse_sr = compute_metrics(hr_array, sr_array, up_array)
+        psnr_sr, psnr_up, ssim_sr, ssim_up= compute_metrics(hr_array, sr_array, up_array)
 
-        # Compute Average Gradient (AG)
-        ag_hr = compute_AG(hr_img)
-        ag_sr = compute_AG(sr_img)
-        ag_up = compute_AG(up_img)
-
-        # Compute Blur Score
-        blur_sr = compute_blur(sr_img)
-        blur_up = compute_blur(up_img)
 
         #Compute LPIPS
         lpips_sr = compute_lpips(hr_array, sr_array)
@@ -134,15 +90,7 @@ def process_category(category_dir, sr_path, up_root_path):
         psnr_up_values.append(psnr_up)
         ssim_sr_values.append(ssim_sr)
         ssim_up_values.append(ssim_up)
-        brisque_sr_values.append(brisque_sr)
-        brisque_up_values.append(brisque_up)
-        ag_hr_values.append(ag_hr)
-        ag_sr_values.append(ag_sr)
-        ag_up_values.append(ag_up)
-        rmse_up_values.append(rmse_up)
-        rmse_sr_values.append(rmse_sr)
-        blur_sr_values.append(blur_sr)
-        blur_up_values.append(blur_up)
+
 
     # Compute category-wise averages
     if psnr_sr_values:
@@ -151,15 +99,6 @@ def process_category(category_dir, sr_path, up_root_path):
             "avg_psnr_up": np.mean(psnr_up_values),
             "avg_ssim_sr": np.mean(ssim_sr_values),
             "avg_ssim_up": np.mean(ssim_up_values),
-            "avg_brisque_sr": np.mean(brisque_sr_values),
-            "avg_brisque_up": np.mean(brisque_up_values),
-            "avg_ag_hr": np.mean(ag_hr_values),
-            "avg_ag_sr": np.mean(ag_sr_values),
-            "avg_ag_up": np.mean(ag_up_values),
-            "avg_rmse_sr": np.mean(rmse_sr_values),
-            "avg_rmse_up": np.mean(rmse_up_values),
-            "avg_blur_sr": np.mean(blur_sr_values),
-            "avg_blur_up": np.mean(blur_up_values),
             "avg_lpips_sr": np.mean(lpips_sr_values),
             "avg_lpips_up": np.mean(lpips_up_values)
 
@@ -170,11 +109,10 @@ def process_category(category_dir, sr_path, up_root_path):
 def save_metrics_to_csv(category_metrics, output_metrics_file):
     """Save category-wise metrics to a CSV file."""
     with open(output_metrics_file, "w") as f:
-        f.write("Category,Avg_PSNR_SR,Avg_PSNR_UP,Avg_SSIM_SR,Avg_SSIM_UP,Avg_BRISQUE_SR,Avg_BRISQUE_UP,Avg_AG_HR,Avg_AG_SR,Avg_AG_UP, RMSE_SR, RMSE_UP, Blur_SR, Blur_UP, LPIPS_SR, LPIPS_UP\n")
+        f.write("Category,Avg_PSNR_SR,Avg_PSNR_UP,Avg_SSIM_SR,Avg_SSIM_UP,LPIPS_SR, LPIPS_UP\n")
         for category, metrics in category_metrics.items():
             f.write(f"{category},{metrics['avg_psnr_sr']:.4f},{metrics['avg_psnr_up']:.4f},{metrics['avg_ssim_sr']:.4f},{metrics['avg_ssim_up']:.4f},"
-                    f"{metrics['avg_brisque_sr']:.4f},{metrics['avg_brisque_up']:.4f},{metrics['avg_ag_hr']:.4f},{metrics['avg_ag_sr']:.4f},{metrics['avg_ag_up']:.4f}, "
-                    f"{metrics['avg_rmse_sr']:.4f},{metrics['avg_rmse_up']:.4f},{metrics['avg_blur_sr']:4f}, {metrics['avg_blur_up']:.4f}, {metrics['avg_lpips_sr']:.4f}, {metrics['avg_lpips_up']:.4f}\n")
+                    f"{metrics['avg_lpips_sr']:.4f}, {metrics['avg_lpips_up']:.4f}\n")
 
 
 def main():
@@ -182,7 +120,7 @@ def main():
     sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\delft3"
     hr_path = r"D:\Super_Resolution\Delft\HR\real_hr\tiles_256"
     up_root_path = r"D:\Super_Resolution\Delft\HR\generated_hr_normal_upscale\tiles_256_bic"
-    output_metrics_file = "category_metrics_results_new.csv"
+    output_metrics_file = "metrics_results_new.csv"
 
     # Initialize storage for category-based results
     category_metrics = {}
@@ -204,7 +142,7 @@ def main():
     # Print results in a table format
     table_headers = [
         "Category", "PSNR(SR)", "PSNR(UP)", "SSIM(SR)", "SSIM(UP)",
-        "BRISQUE(SR)", "BRISQUE(UP)", "AG(HR)", "AG(SR)", "AG(UP)", "RMSE(SR)", "RMSE(UP)", "BLUR(SR)", "BLUR(UP)", "LPIPS(SR)", "LPIPS(UP)"
+        "LPIPS(SR)", "LPIPS(UP)"
     ]
     table_data = []
 
@@ -213,10 +151,6 @@ def main():
             category,
             f"{metrics['avg_psnr_sr']:.4f}", f"{metrics['avg_psnr_up']:.4f}",
             f"{metrics['avg_ssim_sr']:.4f}", f"{metrics['avg_ssim_up']:.4f}",
-            f"{metrics['avg_brisque_sr']:.4f}", f"{metrics['avg_brisque_up']:.4f}",
-            f"{metrics['avg_ag_hr']:.4f}", f"{metrics['avg_ag_sr']:.4f}", f"{metrics['avg_ag_up']:.4f}",
-            f"{metrics['avg_rmse_sr']:.4f}", f"{metrics['avg_rmse_up']:.4f}",
-            f"{metrics['avg_blur_sr']:.4f}", f"{metrics['avg_blur_up']:.4f}",
             f"{metrics['avg_lpips_sr']:.4f}", f"{metrics['avg_lpips_up']:.4f}"
         ])
 
@@ -228,11 +162,8 @@ def main():
     print("Metric Interpretation:")
     print("• PSNR: Higher is better. If PSNR(SR) > PSNR(UP), SR performs better than simple upscaling.")
     print("• SSIM: Higher means more perceptual similarity to ground truth. If SSIM(SR) > SSIM(UP), SR is preferable.")
-    print("• BRISQUE: Lower is better. If BRISQUE(SR) < BRISQUE(UP), SR produces more natural images.")
-    print("• RMSE: Lower is better. If RMSE(SR) < RMSE(UP), SR is closer to ground truth in terms of pixel accuracy.")
-    print("• Average Gradient (AG): Higher means sharper edges. If AG(SR) > AG(UP), SR preserves textures better.")
-    print("• Blur Score: Lower values indicate sharper images. If BLUR(SR) < BLUR(UP), SR reduces blur more effectively.")
-    print("• LPIPS(SR): Lower values mean higher perceptual similarity to the ground truth. If LPIPS(SR) < LPIPS(UP), the SR method gives more perceptually accurate results.")
+    print("• LPIPS(SR): Lower values mean higher perceptual similarity to the ground truth. If LPIPS(SR) < LPIPS(UP), "
+          "the SR method gives more perceptually accurate results.")
     print("-" * 80)
 
 

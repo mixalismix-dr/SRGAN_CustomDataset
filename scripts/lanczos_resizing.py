@@ -60,7 +60,7 @@ def process_images(input_dir, output_dir, scale, resampling, mode):
                     raise ValueError("Invalid mode. Choose 'down' or 'up'.")
 
                 # Resize with PIL using Lanczos
-                resized_pil = pil_image.resize(new_size, Image.LANCZOS)
+                resized_pil = pil_image.resize(new_size, Image.BICUBIC)
 
                 # Convert back to NumPy array
                 resized_data = np.array(resized_pil).astype(np.uint8)  # Convert back to NumPy
@@ -87,13 +87,13 @@ def process_images(input_dir, output_dir, scale, resampling, mode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Resize georeferenced RGB images while keeping CRS.")
 
-    parser.add_argument("--input_dir", type=str, default=r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\custom_dataset\train_HR3_rgba",
+    parser.add_argument("--input_dir", type=str, default=r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\test_data\delft3",
                         help="Path to the input directory containing images.")
-    parser.add_argument("--output_dir", type=str, default=r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\custom_dataset\train_LR3_rgba",
+    parser.add_argument("--output_dir", type=str, default=r"D:\Super_Resolution\Delft\HR\generated_hr_normal_upscale\tiles_256_bic",
                         help="Path to the output directory for resized images.")
     parser.add_argument("--scale", type=int, default=4, help="Scaling factor (default=4).")
-    parser.add_argument("--mode", type=str, choices=["down", "up"], default="down",
+    parser.add_argument("--mode", type=str, choices=["down", "up"], default="up",
                         help="Mode: 'down' for downsampling, 'up' for upsampling (default='down').")
 
     args = parser.parse_args()
-    resize_images(args.input_dir, args.output_dir, args.scale, "lanczos", args.mode)
+    resize_images(args.input_dir, args.output_dir, args.scale, "bic", args.mode)
