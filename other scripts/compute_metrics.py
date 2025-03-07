@@ -6,6 +6,18 @@ from skimage.color import rgb2ycbcr
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity, mean_squared_error
 from tqdm import tqdm
 from tabulate import tabulate
+import torch
+import lpips
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+lpips_fn = lpips.LPIPS(net='vgg').to(device)
+
+def compute_lpips(hr_array, sr_array):
+    hr_tensor = torch.tensor(hr_array / 255.0, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0).to(device)
+    sr_tensor = torch.tensor(sr_array / 255.0, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0).to(device)
+    hr_tensor = hr_tensor * 2 - 1
+    sr_tensor = sr_tensor * 2 - 1
+    return lpips_fn(sr_tensor, hr_tensor).item()
 
 def compute_blur(image_path):
     """Compute blur score using variance of Laplacian."""
@@ -40,6 +52,7 @@ def compute_metrics(hr_array, sr_array, up_array):
     y_sr = rgb2ycbcr(sr_array)[:, :, 0]
     y_up = rgb2ycbcr(up_array)[:, :, 0]
 
+
     # Compute PSNR
     psnr_sr = peak_signal_noise_ratio(y_hr, y_sr, data_range=255.0)
     psnr_up = peak_signal_noise_ratio(y_hr, y_up, data_range=255.0)
@@ -66,6 +79,7 @@ def process_category(category_dir, sr_path, up_root_path):
     """Process all images in a category and compute metrics."""
     hr_images = sorted(glob.glob(os.path.join(category_dir, "*.tif")))
 
+    lpips_sr_values, lpips_up_values = [], []
     psnr_sr_values, psnr_up_values = [], []
     ssim_sr_values, ssim_up_values = [], []
     brisque_sr_values, brisque_up_values = [], []
@@ -108,7 +122,14 @@ def process_category(category_dir, sr_path, up_root_path):
         blur_sr = compute_blur(sr_img)
         blur_up = compute_blur(up_img)
 
+        #Compute LPIPS
+        lpips_sr = compute_lpips(hr_array, sr_array)
+        lpips_up = compute_lpips(hr_array, up_array)
+
         # Store values
+        lpips_sr_values.append(lpips_sr)
+        lpips_up_values.append(lpips_up)
+
         psnr_sr_values.append(psnr_sr)
         psnr_up_values.append(psnr_up)
         ssim_sr_values.append(ssim_sr)
@@ -139,6 +160,8 @@ def process_category(category_dir, sr_path, up_root_path):
             "avg_rmse_up": np.mean(rmse_up_values),
             "avg_blur_sr": np.mean(blur_sr_values),
             "avg_blur_up": np.mean(blur_up_values),
+            "avg_lpips_sr": np.mean(lpips_sr_values),
+            "avg_lpips_up": np.mean(lpips_up_values)
 
         }
     return None
@@ -147,16 +170,16 @@ def process_category(category_dir, sr_path, up_root_path):
 def save_metrics_to_csv(category_metrics, output_metrics_file):
     """Save category-wise metrics to a CSV file."""
     with open(output_metrics_file, "w") as f:
-        f.write("Category,Avg_PSNR_SR,Avg_PSNR_UP,Avg_SSIM_SR,Avg_SSIM_UP,Avg_BRISQUE_SR,Avg_BRISQUE_UP,Avg_AG_HR,Avg_AG_SR,Avg_AG_UP, RMSE_SR, RMSE_UP, Blur_SR, Blur_UP\n")
+        f.write("Category,Avg_PSNR_SR,Avg_PSNR_UP,Avg_SSIM_SR,Avg_SSIM_UP,Avg_BRISQUE_SR,Avg_BRISQUE_UP,Avg_AG_HR,Avg_AG_SR,Avg_AG_UP, RMSE_SR, RMSE_UP, Blur_SR, Blur_UP, LPIPS_SR, LPIPS_UP\n")
         for category, metrics in category_metrics.items():
             f.write(f"{category},{metrics['avg_psnr_sr']:.4f},{metrics['avg_psnr_up']:.4f},{metrics['avg_ssim_sr']:.4f},{metrics['avg_ssim_up']:.4f},"
                     f"{metrics['avg_brisque_sr']:.4f},{metrics['avg_brisque_up']:.4f},{metrics['avg_ag_hr']:.4f},{metrics['avg_ag_sr']:.4f},{metrics['avg_ag_up']:.4f}, "
-                    f"{metrics['avg_rmse_sr']:.4f},{metrics['avg_rmse_up']:.4f},{metrics['avg_blur_sr']:4f}, {metrics['avg_blur_up']:.4f}\n")
+                    f"{metrics['avg_rmse_sr']:.4f},{metrics['avg_rmse_up']:.4f},{metrics['avg_blur_sr']:4f}, {metrics['avg_blur_up']:.4f}, {metrics['avg_lpips_sr']:.4f}, {metrics['avg_lpips_up']:.4f}\n")
 
 
 def main():
     # Paths
-    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\delft4"
+    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\delft4_old"
     hr_path = r"D:\Super_Resolution\Delft\HR\real_hr\tiles_256"
     up_root_path = r"D:\Super_Resolution\Delft\HR\generated_hr_normal_upscale\tiles_256"
     output_metrics_file = "category_metrics_results_new.csv"
@@ -181,7 +204,7 @@ def main():
     # Print results in a table format
     table_headers = [
         "Category", "PSNR(SR)", "PSNR(UP)", "SSIM(SR)", "SSIM(UP)",
-        "BRISQUE(SR)", "BRISQUE(UP)", "AG(HR)", "AG(SR)", "AG(UP)", "RMSE(SR)", "RMSE(UP)", "BLUR(SR)", "BLUR(UP)"
+        "BRISQUE(SR)", "BRISQUE(UP)", "AG(HR)", "AG(SR)", "AG(UP)", "RMSE(SR)", "RMSE(UP)", "BLUR(SR)", "BLUR(UP)", "LPIPS(SR)", "LPIPS(UP)"
     ]
     table_data = []
 
@@ -193,7 +216,8 @@ def main():
             f"{metrics['avg_brisque_sr']:.4f}", f"{metrics['avg_brisque_up']:.4f}",
             f"{metrics['avg_ag_hr']:.4f}", f"{metrics['avg_ag_sr']:.4f}", f"{metrics['avg_ag_up']:.4f}",
             f"{metrics['avg_rmse_sr']:.4f}", f"{metrics['avg_rmse_up']:.4f}",
-            f"{metrics['avg_blur_sr']:.4f}", f"{metrics['avg_blur_up']:.4f}"
+            f"{metrics['avg_blur_sr']:.4f}", f"{metrics['avg_blur_up']:.4f}",
+            f"{metrics['avg_lpips_sr']:.4f}", f"{metrics['avg_lpips_up']:.4f}"
         ])
 
     print("\nCategory-wise results:")
@@ -207,8 +231,8 @@ def main():
     print("• BRISQUE: Lower is better. If BRISQUE(SR) < BRISQUE(UP), SR produces more natural images.")
     print("• RMSE: Lower is better. If RMSE(SR) < RMSE(UP), SR is closer to ground truth in terms of pixel accuracy.")
     print("• Average Gradient (AG): Higher means sharper edges. If AG(SR) > AG(UP), SR preserves textures better.")
-    print(
-        "• Blur Score: Lower values indicate sharper images. If BLUR(SR) < BLUR(UP), SR reduces blur more effectively.")
+    print("• Blur Score: Lower values indicate sharper images. If BLUR(SR) < BLUR(UP), SR reduces blur more effectively.")
+    print("• LPIPS(SR): Lower values mean higher perceptual similarity to the ground truth. If LPIPS(SR) < LPIPS(UP), the SR method gives more perceptually accurate results.")
     print("-" * 80)
 
 
