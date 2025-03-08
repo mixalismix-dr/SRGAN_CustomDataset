@@ -120,7 +120,6 @@ def train(args):
         fake_label = torch.zeros((args.batch_size, 1)).to(device)
 
         while fine_epoch < args.fine_train_epoch:
-            scheduler.step()
 
             epoch_g_loss = 0
             epoch_d_loss = 0
@@ -129,16 +128,11 @@ def train(args):
                 gt = tr_data['GT'].to(device)
                 lr = tr_data['LR'].to(device)
 
-
-
                 ## **Training Discriminator**
                 # For the generator (train with both lr and mask_lr):
                 output, _ = generator(lr)  # Pass to the generator
                 fake_prob = discriminator(output)
                 real_prob = discriminator(gt)
-
-                real_label = torch.ones_like(real_prob).to(device)
-                fake_label = torch.zeros_like(fake_prob).to(device)
 
                 d_loss_real = cross_ent(real_prob, real_label)
                 d_loss_fake = cross_ent(fake_prob, fake_label)
@@ -170,6 +164,7 @@ def train(args):
                 g_loss.backward()
                 g_optim.step()
                 # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+                scheduler.step()
 
                 epoch_g_loss += g_loss.item()
                 epoch_d_loss += d_loss.item()
