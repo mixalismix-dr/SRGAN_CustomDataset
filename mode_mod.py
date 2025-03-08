@@ -134,6 +134,9 @@ def train(args):
                 fake_prob = discriminator(output)
                 real_prob = discriminator(gt)
 
+                real_label = torch.ones_like(real_prob).to(device)
+                fake_label = torch.zeros_like(fake_prob).to(device)
+
                 d_loss_real = cross_ent(real_prob, real_label)
                 d_loss_fake = cross_ent(fake_prob, fake_label)
                 d_loss = d_loss_real + d_loss_fake
