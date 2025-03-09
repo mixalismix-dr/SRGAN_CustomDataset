@@ -136,7 +136,7 @@ def train(args):
             plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png")
 
         if pre_epoch % 800 == 0:
-            torch.save(generator.state_dict(), f'./model_mod1/pre_trained_model_{pre_epoch}.pt')
+            torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
             # generate(args)
 
     #### **Fine-Tuning Using Perceptual & Adversarial Loss**
@@ -217,8 +217,8 @@ def train(args):
                       second_losses=d_losses, second_label="Discriminator Loss")
 
         if fine_epoch % 500 == 0:
-            torch.save(generator.state_dict(), f'./model_mod1/SRGAN_gene_{fine_epoch}.pt')
-            torch.save(discriminator.state_dict(), f'./model_mod1/SRGAN_discrim_{fine_epoch}.pt')
+            torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
+            torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
 
 
 writer.close()
