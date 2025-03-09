@@ -137,7 +137,7 @@ def train(args):
 
         if pre_epoch % 800 == 0:
             torch.save(generator.state_dict(), f'./model_mod1/pre_trained_model_{pre_epoch}.pt')
-            generate(args)
+            # generate(args)
 
     #### **Fine-Tuning Using Perceptual & Adversarial Loss**
     vgg_net = vgg19().to(device).eval()
