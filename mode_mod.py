@@ -268,7 +268,7 @@ def test_only(args):
     generator = generator.to(device)
     generator.eval()
 
-    original_raster_dir = r"test_data/delft3"
+    original_raster_dir = r"test_data/delft4"
     output_dir = 'result/delft4'
     os.makedirs(output_dir, exist_ok=True)
 
