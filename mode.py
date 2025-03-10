@@ -189,7 +189,6 @@ def train(args):
     fake_label = torch.zeros((args.batch_size, 1)).to(device)
 
     while fine_epoch < args.fine_train_epoch:
-        scheduler.step()
 
         epoch_g_loss = 0
         epoch_d_loss = 0
