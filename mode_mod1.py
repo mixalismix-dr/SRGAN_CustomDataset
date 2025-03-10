@@ -98,6 +98,7 @@ def train(args):
 
     l2_loss = nn.MSELoss()
     g_optim = optim.Adam(generator.parameters(), lr=1e-4)
+    scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
     pre_epoch = 0
     fine_epoch = 0
@@ -107,7 +108,7 @@ def train(args):
     #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
         epoch_loss = 0
-        for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch}/{args.pre_train_epoch}"):
+        for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch + 1}/{args.pre_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
 
@@ -120,7 +121,7 @@ def train(args):
 
             epoch_loss += loss.item()
 
-        optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+        scheduler.step()
 
         pretrain_losses.append(epoch_loss / len(loader))
         epochs_pretrain.append(pre_epoch)
@@ -159,7 +160,7 @@ def train(args):
         epoch_g_loss = 0
         epoch_d_loss = 0
 
-        for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch}/{args.fine_train_epoch}"):
+        for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch + 1}/{args.fine_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
 
@@ -198,7 +199,7 @@ def train(args):
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
 
-        optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+        scheduler.step()
 
         avg_g_loss = epoch_g_loss / len(loader)
         avg_d_loss = epoch_d_loss / len(loader)

@@ -21,8 +21,10 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 import logging
 import lpips
-
+import time
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
+from scripts.metrics import compute_metrics, compute_lpips, peak_signal_noise_ratio
 
 # Tracking loss values
 pretrain_losses = []
@@ -70,24 +72,43 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
 
 logging.basicConfig(filename="log.txt", level=logging.INFO, format="%(message)s")
 
+from datetime import datetime
 
-def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fine_tuning):
+def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fine_tuning, duration, num_samples, start_time):
+    end_time = time.time()
+    duration_formatted = f"{int(duration // 3600)}h {int((duration % 3600) // 60)}m {int(duration % 60)}s"
+
+    start_time_formatted = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+    end_time_formatted = datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
+
     log_message = (
-        f"Fine-tuned Epoch: {fine_epoch}, Pretrained Epoch: {pre_epoch}, "
-        f"Patch Size: {patch_size}, LR Path: {LR_path}, GT Path: {GT_path}, "
+        f"Training Details:\n"
+        f"-----------------\n"
+        f"Time Started: {start_time_formatted}\n"
+        f"Time Finished: {end_time_formatted}\n"
+        f"Training Duration: {duration_formatted}\n"
+        f"Total Samples Used: {num_samples}\n"
+        f"Fine-tuned Epochs: {fine_epoch}, Pretrained Epochs: {pre_epoch}\n"
+        f"Patch Size: {patch_size}\n"
+        f"LR Path: {LR_path}\n"
+        f"GT Path: {GT_path}\n"
         f"Fine Tuning: {fine_tuning}\n"
+        f"-----------------\n"
     )
-    logging.info(log_message)  # Log the message to the file
 
-
+    logging.info(log_message)
+    print(log_message)  # Also print to console
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    start_time = time.time()
 
     transform = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
     dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, in_memory=args.in_memory, transform=transform)
     check_and_adjust_batch_size(dataset, args.batch_size)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    num_samples = len(dataset)
 
     generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num, scale=args.scale).to(device)
 
@@ -99,16 +120,18 @@ def train(args):
 
     l2_loss = nn.MSELoss()
     g_optim = optim.Adam(generator.parameters(), lr=1e-4)
+    scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
     pre_epoch = 0
     fine_epoch = 0
 
-    log_training_details(args.fine_train_epoch, args.pre_train_epoch, args.patch_size, args.LR_path, args.GT_path, args.fine_tuning)
-
     #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
         epoch_loss = 0
-        for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch}/{args.pre_train_epoch}"):
+        psnr_total = 0
+        num_samples = 0
+
+        for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch + 1}/{args.pre_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
 
@@ -119,22 +142,33 @@ def train(args):
             loss.backward()
             g_optim.step()
 
+            output_np = output[0].detach().cpu().numpy().transpose(1, 2, 0)
+            gt_np = gt[0].cpu().numpy().transpose(1, 2, 0)
+
+            psnr = peak_signal_noise_ratio(gt_np, output_np, data_range=255.0)
+            psnr_total += psnr
+            num_samples += 1
+
             epoch_loss += loss.item()
 
-        optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+        scheduler.step()
 
-        pretrain_losses.append(epoch_loss / len(loader))
-        epochs_pretrain.append(pre_epoch)
+        # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+
+        avg_psnr = psnr_total / num_samples
         avg_l2_loss = epoch_loss / len(loader)
+
         writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)  # Log L2 loss
+        writer.add_scalar("Metrics/PSNR_Pretrain", avg_psnr, pre_epoch)
+
         pretrain_losses.append(avg_l2_loss)
         epochs_pretrain.append(pre_epoch)
 
         pre_epoch += 1
 
         if pre_epoch % 50 == 0:
-            print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}")
-            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png")
+            print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}, PSNR: {avg_psnr:.4f}")
+            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png", )
 
         if pre_epoch % 800 == 0:
             torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
@@ -157,12 +191,16 @@ def train(args):
     while fine_epoch < args.fine_train_epoch:
         scheduler.step()
 
+        psnr_total = 0
+        num_samples = 0
+
         epoch_g_loss = 0
         epoch_d_loss = 0
 
-        for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch}/{args.fine_train_epoch}"):
+        for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch + 1}/{args.fine_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
+
 
             ## **Training Discriminator**
             output, _ = generator(lr)
@@ -199,27 +237,48 @@ def train(args):
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
 
+        scheduler.step()
+
         optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
+        # Compute Average Metrics for the Epoch
+        avg_psnr = psnr_total / num_samples
         avg_g_loss = epoch_g_loss / len(loader)
         avg_d_loss = epoch_d_loss / len(loader)
 
-        writer.add_scalar("Loss/Generator_Loss", avg_g_loss, fine_epoch)  # Log Generator loss
-        writer.add_scalar("Loss/Discriminator_Loss", avg_d_loss, fine_epoch)  # Log Discriminator loss
+        # **Log Metrics in TensorBoard**
+        writer.add_scalar("Loss/Generator_Loss", avg_g_loss, fine_epoch)
+        writer.add_scalar("Loss/Discriminator_Loss", avg_d_loss, fine_epoch)
+        writer.add_scalar("Metrics/PSNR", avg_psnr, fine_epoch)
 
-        g_losses.append(epoch_g_loss / len(loader))
-        d_losses.append(epoch_d_loss / len(loader))
+
+        g_losses.append(avg_g_loss)
+        d_losses.append(avg_d_loss)
         epochs_finetune.append(fine_epoch)
         fine_epoch += 1
 
         if fine_epoch % 50 == 0:
-            print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}")
+            print(f"Fine-tune Epoch {fine_epoch}, G Loss: {g_losses[-1]:.6f}, D Loss: {d_losses[-1]:.6f}, PSNR: {avg_psnr:.4f}")
             plot_loss(epochs_finetune, g_losses, "Generator Loss", "Loss", "gan_losses.png",
                       second_losses=d_losses, second_label="Discriminator Loss")
 
         if fine_epoch % 500 == 0:
             torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
             torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
+
+    end_time = time.time()
+    duration = end_time - start_time
+    log_training_details(
+        fine_epoch=args.fine_train_epoch,
+        pre_epoch=args.pre_train_epoch,
+        patch_size=args.patch_size,
+        LR_path=args.LR_path,
+        GT_path=args.GT_path,
+        fine_tuning=args.fine_tuning,
+        duration=duration,
+        num_samples=num_samples,
+        start_time=start_time
+    )
 
 
 writer.close()

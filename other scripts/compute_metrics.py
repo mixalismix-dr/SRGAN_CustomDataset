@@ -8,6 +8,7 @@ from tqdm import tqdm
 from tabulate import tabulate
 import torch
 import lpips
+from PIL import Image
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 lpips_fn = lpips.LPIPS(net='vgg').to(device)
@@ -73,6 +74,13 @@ def compute_metrics(hr_array, sr_array, up_array):
     rmse_up = np.sqrt(mean_squared_error(y_hr, y_up))
 
     return psnr_sr, psnr_up, ssim_sr, ssim_up, brisque_sr, brisque_up, rmse_up, rmse_sr
+
+def upscampling_bic(lr_image):
+    """Upsample a LR image using bicubic interpolation to match HR size."""
+    lr_pil = Image.fromarray(lr_image.astype(np.uint8))
+    new_size = (lr_pil.width * 4, lr_pil.height * 4)  # Scale x4
+    upscaled_pil = lr_pil.resize(new_size, Image.BICUBIC)
+    return np.array(upscaled_pil)
 
 
 def process_category(category_dir, sr_path, up_root_path):
@@ -179,7 +187,7 @@ def save_metrics_to_csv(category_metrics, output_metrics_file):
 
 def main():
     # Paths
-    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\delft3"
+    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\delft4"
     hr_path = r"D:\Super_Resolution\Delft\HR\real_hr\tiles_256"
     up_root_path = r"D:\Super_Resolution\Delft\HR\generated_hr_normal_upscale\tiles_256_bic"
     output_metrics_file = "category_metrics_results_new.csv"
