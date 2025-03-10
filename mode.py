@@ -191,9 +191,6 @@ def train(args):
     while fine_epoch < args.fine_train_epoch:
         scheduler.step()
 
-        psnr_total = 0
-        num_samples = 0
-
         epoch_g_loss = 0
         epoch_d_loss = 0
 
@@ -214,7 +211,6 @@ def train(args):
             d_optim.zero_grad()
             d_loss.backward()
             d_optim.step()
-            # optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
             ## **Training Generator**
             output, _ = generator(lr)
@@ -232,17 +228,13 @@ def train(args):
             g_optim.zero_grad()
             g_loss.backward()
             g_optim.step()
-            # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
 
         scheduler.step()
 
-        optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
-
         # Compute Average Metrics for the Epoch
-        avg_psnr = psnr_total / num_samples
         avg_g_loss = epoch_g_loss / len(loader)
         avg_d_loss = epoch_d_loss / len(loader)
 
