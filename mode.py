@@ -24,7 +24,7 @@ import lpips
 import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-from scripts.metrics import compute_metrics, compute_lpips, peak_signal_noise_ratio
+from skimage.metrics import peak_signal_noise_ratio
 
 # Tracking loss values
 pretrain_losses = []
