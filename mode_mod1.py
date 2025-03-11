@@ -284,7 +284,7 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/delft4"
+    original_raster_dir = r"test_data/delft4_edge"
     output_dir = 'result/delft4'
     os.makedirs(output_dir, exist_ok=True)
 

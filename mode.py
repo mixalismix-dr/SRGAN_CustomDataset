@@ -72,9 +72,8 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
 
 logging.basicConfig(filename="log.txt", level=logging.INFO, format="%(message)s")
 
-from datetime import datetime
 
-def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fine_tuning, duration, num_samples, start_time):
+def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fine_tuning, duration, num_images, start_time):
     end_time = time.time()
     duration_formatted = f"{int(duration // 3600)}h {int((duration % 3600) // 60)}m {int(duration % 60)}s"
 
@@ -87,7 +86,7 @@ def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fi
         f"Time Started: {start_time_formatted}\n"
         f"Time Finished: {end_time_formatted}\n"
         f"Training Duration: {duration_formatted}\n"
-        f"Total Samples Used: {num_samples}\n"
+        f"Total Samples Used: {num_images}\n"
         f"Fine-tuned Epochs: {fine_epoch}, Pretrained Epochs: {pre_epoch}\n"
         f"Patch Size: {patch_size}\n"
         f"LR Path: {LR_path}\n"
@@ -108,7 +107,7 @@ def train(args):
     dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, in_memory=args.in_memory, transform=transform)
     check_and_adjust_batch_size(dataset, args.batch_size)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
-    num_samples = len(dataset)
+    num_images = len(os.listdir(dataset.LR_path))
 
     generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num, scale=args.scale).to(device)
 
@@ -240,7 +239,7 @@ def train(args):
         # **Log Metrics in TensorBoard**
         writer.add_scalar("Loss/Generator_Loss", avg_g_loss, fine_epoch)
         writer.add_scalar("Loss/Discriminator_Loss", avg_d_loss, fine_epoch)
-        writer.add_scalar("Metrics/PSNR", avg_psnr, fine_epoch)
+        # writer.add_scalar("Metrics/PSNR", avg_psnr, fine_epoch)
 
 
         g_losses.append(avg_g_loss)
@@ -267,7 +266,7 @@ def train(args):
         GT_path=args.GT_path,
         fine_tuning=args.fine_tuning,
         duration=duration,
-        num_samples=num_samples,
+        num_samples=num_images,
         start_time=start_time
     )
 
@@ -336,7 +335,7 @@ def test_only(args):
 
     # Directory for original raster metadata and output
     original_raster_dir = r"test_data/delft4"
-    output_dir = 'result/delft4_old'
+    output_dir = 'result/delft4_base'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
