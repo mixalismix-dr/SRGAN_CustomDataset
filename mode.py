@@ -266,7 +266,7 @@ def train(args):
         GT_path=args.GT_path,
         fine_tuning=args.fine_tuning,
         duration=duration,
-        num_samples=num_images,
+        num_images=num_images,
         start_time=start_time
     )
 
