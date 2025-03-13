@@ -333,57 +333,16 @@ def test_only(args):
     generator = generator.to(device)
     generator.eval()
 
-    # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/delft4"
-    output_dir = 'result/delft4_base'
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Get all original raster files dynamically
-    raster_files = glob.glob(os.path.join(original_raster_dir, "tile_*.tif"))
-    raster_files.sort()  # Sort the files alphabetically (important for consistency)
-
-    # Iterate through the LR tiles and generate SR images
     with torch.no_grad():
         for i, te_data in enumerate(loader):
-            # Dynamically match the corresponding original raster
-            if i >= len(raster_files):
-                print(f"No corresponding raster for index {i}. Skipping...")
-                continue
+            lr = te_data['LR'].to(device)
+            output, _ = generator(lr)
+            output = output[0].cpu().numpy()
+            output = (output + 1.0) / 2.0
+            output = output.transpose(1, 2, 0)
+            result = Image.fromarray((output * 255.0).astype(np.uint8))
+            result.save('./result/res_%04d.png' % i)
 
-            original_raster = raster_files[i]
-            base_name = os.path.basename(original_raster).replace(".tif", "")  # Extract base name without extension
-            output_tile_path = os.path.join(output_dir, f"res_{base_name}.tif")
-
-            # Get metadata from the original raster
-            with rasterio.open(original_raster) as src:
-                transform = src.transform  # Get the original affine transform
-                crs = src.crs  # Get the CRS
-                profile = src.profile  # Get raster profile
-
-                # Generate SR output
-                lr = te_data['LR'].to(device)
-                output, _ = generator(lr)
-                output = output[0].cpu().numpy()
-                output = (output + 1.0) / 2.0  # Rescale to [0, 1]
-                output = output.transpose(1, 2, 0)  # Rearrange dimensions for saving
-
-                # Update profile to match the SR resolution and output data
-                profile.update({
-                    "height": output.shape[0],
-                    "width": output.shape[1],
-                    "transform": Affine(
-                        transform.a / args.scale, transform.b, transform.c,
-                        transform.d, transform.e / args.scale, transform.f
-                    ),  # Adjust affine for scaling
-                    "dtype": "uint8",
-                    "count": output.shape[2],  # Number of bands (e.g., RGB = 3)
-                })
-
-                # Write SR output as a GeoTIFF
-                with rasterio.open(output_tile_path, "w", **profile) as dst:
-                    dst.write((output * 255).astype(np.uint8).transpose(2, 0, 1))  # Save as uint8
-
-            print(f"Saved SR image with metadata: {output_tile_path}")
 
 def generate(args, model_dir='model', output_dir='generated_photos', gif_output_dir='progress_gifs', samples=10, model_type="pre_trained"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

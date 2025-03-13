@@ -1,70 +1,96 @@
 import os
-import argparse
+import rasterio
+from rasterio.windows import Window
+import numpy as np
+from tqdm import tqdm
 from PIL import Image
 
-# Define available resampling methods
-RESAMPLING_METHODS = {
-    "lanczos": Image.Resampling.LANCZOS,
-    "bicubic": Image.Resampling.BICUBIC,
-    "bilinear": Image.Resampling.BILINEAR,
-    "nearest": Image.Resampling.NEAREST,
-}
+# Paths
+hr_input = r"D:\Super_Resolution\Delft\HR\hr_1km_1km\Delft_hr_1km_1km_2_6.tif"
+lr_input = r"D:\Super_Resolution\Delft\LR\lr_1km_1km\Delft_lr_1km_1km_2_6.tif"
+hr_output_dir = r"D:\Super_Resolution\Delft\HR\upscaled_tiles_256x256"
+lr_output_dir = r"D:\Super_Resolution\Delft\LR\real_lr\tiles_64x64"
+os.makedirs(hr_output_dir, exist_ok=True)
+os.makedirs(lr_output_dir, exist_ok=True)
 
+# HR Parameters
+hr_tile_size = 400  # HR tile size before upscaling
+scale_factor = 0.08 / 0.0625  # 8cm -> 6.25cm (1.28x)
 
-def resize_images(input_root, output_root, scale=4, resampling="lanczos", mode="down"):
-    """ Resizes images inside subdirectories while preserving the folder structure. """
+# LR Parameters
+lr_tile_size = 64  # LR tile size
+lr_scale_factor = 25 / 6.25  # 25cm -> 6.25cm
 
-    if resampling not in RESAMPLING_METHODS:
-        raise ValueError(f"Invalid resampling method. Choose from: {list(RESAMPLING_METHODS.keys())}")
+with rasterio.open(hr_input) as hr_src, rasterio.open(lr_input) as lr_src:
+    width, height = hr_src.width, hr_src.height
+    hr_transform = hr_src.transform
+    lr_transform = lr_src.transform
 
-    for subdir in os.listdir(input_root):
-        input_dir = os.path.join(input_root, subdir)
-        output_dir = os.path.join(output_root, subdir)
+    # Iterate through HR raster and extract matching LR tiles
+    for y in tqdm(range(0, height, hr_tile_size)):
+        for x in range(0, width, hr_tile_size):
+            if x + hr_tile_size > width or y + hr_tile_size > height:
+                continue
 
-        if not os.path.isdir(input_dir):
-            continue  # Skip non-directory files
+            # **Process HR Tile**
+            hr_window = Window(x, y, hr_tile_size, hr_tile_size)
+            hr_tile = hr_src.read(window=hr_window).transpose(1, 2, 0)
 
-        os.makedirs(output_dir, exist_ok=True)  # Create corresponding subdirectory
+            hr_tile_pil = Image.fromarray(hr_tile.astype(np.uint8))
 
-        for filename in os.listdir(input_dir):
-            if filename.lower().endswith(".tif"):
-                input_path = os.path.join(input_dir, filename)
-                output_filename = filename.replace(".tif", f"_{resampling}_{mode}.tif")
-                output_path = os.path.join(output_dir, output_filename)
+            # Upscale HR from 400x400 (8 cm) to 512x512 (6.25 cm)
+            upscaled_tile_pil = hr_tile_pil.resize((512, 512), Image.BICUBIC)
+            upscaled_tile = np.array(upscaled_tile_pil)
 
-                # Open image
-                image = Image.open(input_path)
+            base_transform = rasterio.windows.transform(hr_window, hr_transform)
 
-                # Compute new dimensions
-                if mode == "down":
-                    new_size = (image.width // scale, image.height // scale)
-                elif mode == "up":
-                    new_size = (image.width * scale, image.height * scale)
-                else:
-                    raise ValueError("Invalid mode. Choose 'down' or 'up'.")
+            # Crop 256x256 patches from upscaled HR tile
+            for i in range(0, 512, 256):
+                for j in range(0, 512, 256):
+                    patch = upscaled_tile[i:i + 256, j:j + 256]
 
-                # Resize using selected resampling method
-                resized_image = image.resize(new_size, RESAMPLING_METHODS[resampling])
+                    # **Generate tile name using spatial coordinates**
+                    tile_name = f"tile_{x}_{y}_{i}_{j}.tif"
 
-                # Save the output image
-                resized_image.save(output_path)
+                    hr_patch_filename = os.path.join(hr_output_dir, f"HR_{tile_name}")
 
-                print(f"Resized image saved at: {output_path}")
+                    patch_transform = rasterio.Affine(
+                        base_transform.a / scale_factor, base_transform.b, base_transform.c + (j * (base_transform.a / scale_factor)),
+                        base_transform.d, base_transform.e / scale_factor, base_transform.f + (i * (base_transform.e / scale_factor))
+                    )
 
+                    hr_profile = hr_src.profile.copy()
+                    hr_profile.update({
+                        "width": 256,
+                        "height": 256,
+                        "transform": patch_transform,
+                        "dtype": "uint8",
+                        "count": hr_tile.shape[2]
+                    })
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Resize images while maintaining directory structure.")
+                    with rasterio.open(hr_patch_filename, "w", **hr_profile) as dst:
+                        dst.write(patch.transpose(2, 0, 1))
 
-    parser.add_argument("--input_root", type=str, default=r"D:\Super_Resolution\Delft\HR\synthetic_lr_from_hr\tiles_64",
-                        help="Root directory containing image subdirectories.")
-    parser.add_argument("--output_root", type=str,
-                        default=r"D:\Super_Resolution\Delft\HR\generated_hr_normal_upscale\tiles_256",
-                        help="Root directory where resized images will be saved.")
-    parser.add_argument("--scale", type=int, default=4, help="Scaling factor (default=4).")
-    parser.add_argument("--resampling", type=str, choices=RESAMPLING_METHODS.keys(), default="lanczos",
-                        help="Resampling method (default='lanczos').")
-    parser.add_argument("--mode", type=str, choices=["down", "up"], default="up",
-                        help="Mode: 'down' for downsampling, 'up' for upsampling (default='down').")
+            # **Process Corresponding LR Tile (Ensure Same Name)**
+            # Convert HR tile (x, y) to world coordinates
+            hr_x, hr_y = hr_transform * (x, y)
 
-    args = parser.parse_args()
-    resize_images(args.input_root, args.output_root, args.scale, args.resampling, args.mode)
+            # Convert to LR grid
+            aligned_x, aligned_y = ~lr_transform * (hr_x, hr_y)
+            aligned_x, aligned_y = int(aligned_x), int(aligned_y)
+
+            lr_window = Window(aligned_x, aligned_y, lr_tile_size, lr_tile_size)
+            lr_tile = lr_src.read(window=lr_window)
+
+            lr_tile_filename = os.path.join(lr_output_dir, f"LR_{tile_name}")
+            lr_profile = lr_src.profile.copy()
+            lr_profile.update({
+                "width": lr_tile_size,
+                "height": lr_tile_size,
+                "transform": rasterio.windows.transform(lr_window, lr_transform)
+            })
+
+            with rasterio.open(lr_tile_filename, "w", **lr_profile) as dst:
+                dst.write(lr_tile)
+
+print(f"Processing completed: {len(os.listdir(hr_output_dir))} HR tiles, {len(os.listdir(lr_output_dir))} LR tiles saved.")
