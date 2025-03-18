@@ -8,7 +8,7 @@ from shapely.validation import make_valid
 import os
 
 # Paths
-tiles_dir = r"D:\Super_Resolution\Delft\LR\real_lr\tiles_64x64"  # Tiles folder
+tiles_dir = r"D:\Super_Resolution\Delft\HR\tiles_256x256"  # Tiles folder
 land_use_path = r"D:\Super_Resolution\shp\land_use_delft.shp"  # Land use shapefile
 
 # Define the grid size based on raster pixel size

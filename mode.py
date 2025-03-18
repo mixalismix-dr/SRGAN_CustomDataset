@@ -333,16 +333,55 @@ def test_only(args):
     generator = generator.to(device)
     generator.eval()
 
+    # Define directories
+    original_raster_dir = args.LR_path  # Use LR path as reference
+    output_dir = './result/delft_base'
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Get all LR raster files
+    lr_raster_files = sorted(glob.glob(os.path.join(original_raster_dir, "*.tif")))
+
     with torch.no_grad():
         for i, te_data in enumerate(loader):
-            lr = te_data['LR'].to(device)
-            output, _ = generator(lr)
-            output = output[0].cpu().numpy()
-            output = (output + 1.0) / 2.0
-            output = output.transpose(1, 2, 0)
-            result = Image.fromarray((output * 255.0).astype(np.uint8))
-            result.save('./result/res_%04d.png' % i)
+            if i >= len(lr_raster_files):
+                print(f"No corresponding raster for index {i}. Skipping...")
+                continue
 
+            lr_raster = lr_raster_files[i]
+            base_name = os.path.basename(lr_raster).replace(".tif", "")
+            output_tile_path = os.path.join(output_dir, f"res_{base_name}.tif")
+
+            with rasterio.open(lr_raster) as src:
+                transform = src.transform
+                crs = src.crs
+                profile = src.profile
+
+                # Generate SR output
+                lr = te_data['LR'].to(device)
+                output, _ = generator(lr)
+                output = output[0].cpu().numpy()
+                output = (output + 1.0) / 2.0  # Rescale to [0, 1]
+                output = output.transpose(1, 2, 0)  # Convert to (H, W, C)
+
+                # Convert NumPy array to uint8
+                output = (output * 255).astype(np.uint8)
+
+                # Update profile with original georeferencing
+                profile.update({
+                    "height": output.shape[0],  # Ensure dimensions match SR output
+                    "width": output.shape[1],
+                    "transform": Affine(
+                        transform.a / args.scale, transform.b, transform.c,
+                        transform.d, transform.e / args.scale, transform.f),  # Preserve original georeferencing
+                    "dtype": "uint8",
+                    "count": output.shape[2]  # Ensure correct band count
+                })
+
+                # Save the SR output with georeferencing
+                with rasterio.open(output_tile_path, "w", **profile) as dst:
+                    dst.write(output.transpose(2, 0, 1))  # Convert to (Bands, H, W)
+
+            print(f"Saved SR image with georeferencing: {output_tile_path}")
 
 def generate(args, model_dir='model', output_dir='generated_photos', gif_output_dir='progress_gifs', samples=10, model_type="pre_trained"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

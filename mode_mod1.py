@@ -268,7 +268,7 @@ def test(args):
             f.write('psnr : %04f \n' % psnr)
 
             result = Image.fromarray((output * 255.0).astype(np.uint8))
-            result.save('./result/res_%04d.tif' % i)
+            result.save('./result/edge/res_%04d.tif' % i)
 
         f.write('avg psnr : %04f' % np.mean(psnr_list))
 
@@ -284,8 +284,8 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/delft4_edge"
-    output_dir = 'result/delft4'
+    original_raster_dir = r"test_data/delft4"
+    output_dir = 'result/delft4_edge'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
