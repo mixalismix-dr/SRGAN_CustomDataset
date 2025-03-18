@@ -73,7 +73,7 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
 logging.basicConfig(filename="log.txt", level=logging.INFO, format="%(message)s")
 
 
-def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fine_tuning, duration, num_images, start_time):
+def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, batch_size, fine_tuning, duration, num_images, start_time):
     end_time = time.time()
     duration_formatted = f"{int(duration // 3600)}h {int((duration % 3600) // 60)}m {int(duration % 60)}s"
 
@@ -87,6 +87,7 @@ def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fi
         f"Time Finished: {end_time_formatted}\n"
         f"Training Duration: {duration_formatted}\n"
         f"Total Samples Used: {num_images}\n"
+        f"Batch Size: {batch_size}\n"
         f"Fine-tuned Epochs: {fine_epoch}, Pretrained Epochs: {pre_epoch}\n"
         f"Patch Size: {patch_size}\n"
         f"LR Path: {LR_path}\n"
@@ -264,6 +265,7 @@ def train(args):
         patch_size=args.patch_size,
         LR_path=args.LR_path,
         GT_path=args.GT_path,
+        batch_size = args.batch_size,
         fine_tuning=args.fine_tuning,
         duration=duration,
         num_images=num_images,

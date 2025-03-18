@@ -20,6 +20,8 @@ from rasterio.transform import Affine
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 import logging
+import time
+from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -70,23 +72,43 @@ def plot_loss(epochs, losses, primary_label, ylabel, filename, second_losses=Non
 logging.basicConfig(filename="log.txt", level=logging.INFO, format="%(message)s")
 
 
-def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, fine_tuning):
-    log_message = (
-        f"Fine-tuned Epoch: {fine_epoch}, Pretrained Epoch: {pre_epoch}, "
-        f"Patch Size: {patch_size}, LR Path: {LR_path}, GT Path: {GT_path}, "
-        f"Fine Tuning: {fine_tuning}\n"
-    )
-    logging.info(log_message)  # Log the message to the file
+def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, batch_size, fine_tuning, duration, num_images, start_time):
+    end_time = time.time()
+    duration_formatted = f"{int(duration // 3600)}h {int((duration % 3600) // 60)}m {int(duration % 60)}s"
 
+    start_time_formatted = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+    end_time_formatted = datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
+
+    log_message = (
+        f"Training Details:\n"
+        f"-----------------\n"
+        f"Time Started: {start_time_formatted}\n"
+        f"Time Finished: {end_time_formatted}\n"
+        f"Training Duration: {duration_formatted}\n"
+        f"Total Samples Used: {num_images}\n"
+        f"Batch Size: {batch_size}\n"
+        f"Fine-tuned Epochs: {fine_epoch}, Pretrained Epochs: {pre_epoch}\n"
+        f"Patch Size: {patch_size}\n"
+        f"LR Path: {LR_path}\n"
+        f"GT Path: {GT_path}\n"
+        f"Fine Tuning: {fine_tuning}\n"
+        f"-----------------\n"
+    )
+
+    logging.info(log_message)
+    print(log_message)  # Also print to console
 
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    start_time = time.time()
+
     transform = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
     dataset = mydata(GT_path=args.GT_path, LR_path=args.LR_path, in_memory=args.in_memory, transform=transform)
     check_and_adjust_batch_size(dataset, args.batch_size)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    num_images = len(os.listdir(dataset.LR_path))
 
     generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num, scale=args.scale).to(device)
 
@@ -219,6 +241,21 @@ def train(args):
         if fine_epoch % 500 == 0:
             torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
             torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
+
+        end_time = time.time()
+        duration = end_time - start_time
+        log_training_details(
+            fine_epoch=args.fine_train_epoch,
+            pre_epoch=args.pre_train_epoch,
+            patch_size=args.patch_size,
+            LR_path=args.LR_path,
+            GT_path=args.GT_path,
+            batch_size=args.batch_size,
+            fine_tuning=args.fine_tuning,
+            duration=duration,
+            num_images=num_images,
+            start_time=start_time
+        )
 
 
 writer.close()
