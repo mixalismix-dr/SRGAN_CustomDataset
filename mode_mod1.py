@@ -130,6 +130,9 @@ def train(args):
     #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
         epoch_loss = 0
+        psnr_total = 0
+        num_samples = 0
+
         for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch + 1}/{args.pre_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
@@ -141,22 +144,33 @@ def train(args):
             loss.backward()
             g_optim.step()
 
+            output_np = output[0].detach().cpu().numpy().transpose(1, 2, 0)
+            gt_np = gt[0].cpu().numpy().transpose(1, 2, 0)
+
+            psnr = peak_signal_noise_ratio(gt_np, output_np, data_range=255.0)
+            psnr_total += psnr
+            num_samples += 1
+
             epoch_loss += loss.item()
 
         scheduler.step()
 
-        pretrain_losses.append(epoch_loss / len(loader))
-        epochs_pretrain.append(pre_epoch)
+        # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+
+        avg_psnr = psnr_total / num_samples
         avg_l2_loss = epoch_loss / len(loader)
+
         writer.add_scalar("Loss/L2_Loss", avg_l2_loss, pre_epoch)  # Log L2 loss
+        writer.add_scalar("Metrics/PSNR_Pretrain", avg_psnr, pre_epoch)
+
         pretrain_losses.append(avg_l2_loss)
         epochs_pretrain.append(pre_epoch)
 
         pre_epoch += 1
 
         if pre_epoch % 50 == 0:
-            print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}")
-            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png")
+            print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}, PSNR: {avg_psnr:.4f}")
+            plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png", )
 
         if pre_epoch % 800 == 0:
             torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
@@ -184,6 +198,7 @@ def train(args):
         for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch + 1}/{args.fine_train_epoch}"):
             gt = tr_data['GT'].to(device)
             lr = tr_data['LR'].to(device)
+
 
             ## **Training Discriminator**
             output, _ = generator(lr)
@@ -242,20 +257,20 @@ def train(args):
             torch.save(generator.state_dict(), f'./model/SRGAN_gene_{fine_epoch}.pt')
             torch.save(discriminator.state_dict(), f'./model/SRGAN_discrim_{fine_epoch}.pt')
 
-        end_time = time.time()
-        duration = end_time - start_time
-        log_training_details(
-            fine_epoch=args.fine_train_epoch,
-            pre_epoch=args.pre_train_epoch,
-            patch_size=args.patch_size,
-            LR_path=args.LR_path,
-            GT_path=args.GT_path,
-            batch_size=args.batch_size,
-            fine_tuning=args.fine_tuning,
-            duration=duration,
-            num_images=num_images,
-            start_time=start_time
-        )
+    end_time = time.time()
+    duration = end_time - start_time
+    log_training_details(
+        fine_epoch=args.fine_train_epoch,
+        pre_epoch=args.pre_train_epoch,
+        patch_size=args.patch_size,
+        LR_path=args.LR_path,
+        GT_path=args.GT_path,
+        batch_size = args.batch_size,
+        fine_tuning=args.fine_tuning,
+        duration=duration,
+        num_images=num_images,
+        start_time=start_time
+    )
 
 
 writer.close()
