@@ -43,8 +43,8 @@ import numpy as np
 #
 # print(f"Upsampled raster saved as {output_raster}")
 
-input_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\LR_tile_569.tif"
-output_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\resampled_569.tif"
+input_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\LR_tile_0.tif"
+output_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\resampled_0_0.tif"
 
 target_res = 0.08  # 8 cm resolution
 target_size = (256, 256)

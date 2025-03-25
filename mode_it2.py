@@ -25,6 +25,7 @@ import time
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from skimage.metrics import peak_signal_noise_ratio
+import cv2
 
 # Tracking loss values
 pretrain_losses = []
@@ -333,28 +334,25 @@ def test_only(args):
     generator = generator.to(device)
     generator.eval()
 
-    # Directories
-    original_raster_dir = r"test_data/delft_real_lr"
-    output_dir = 'result/delft_real_lr_resampled_8cm'
+    # Define directories
+    original_raster_dir = args.LR_path  # Use LR path as reference
+    output_dir = './result/delft_base_fine_tuned_batch_50'
     os.makedirs(output_dir, exist_ok=True)
 
-    # Get all original raster files
-    raster_files = sorted(glob.glob(os.path.join(original_raster_dir, "LR_tile_*.tif")))
-
-    # **Define the upscale factor**
-    upscale_factor = 25.0 / 8.0  # Resampling from 25 cm to 8 cm
+    # Get all LR raster files
+    lr_raster_files = sorted(glob.glob(os.path.join(original_raster_dir, "*.tif")))
 
     with torch.no_grad():
         for i, te_data in enumerate(loader):
-            if i >= len(raster_files):
+            if i >= len(lr_raster_files):
                 print(f"No corresponding raster for index {i}. Skipping...")
                 continue
 
-            original_raster = raster_files[i]
-            base_name = os.path.basename(original_raster).replace(".tif", "")
+            lr_raster = lr_raster_files[i]
+            base_name = os.path.basename(lr_raster).replace(".tif", "")
             output_tile_path = os.path.join(output_dir, f"res_{base_name}.tif")
 
-            with rasterio.open(original_raster) as src:
+            with rasterio.open(lr_raster) as src:
                 transform = src.transform
                 crs = src.crs
                 profile = src.profile
@@ -366,31 +364,30 @@ def test_only(args):
                 output = (output + 1.0) / 2.0  # Rescale to [0, 1]
                 output = output.transpose(1, 2, 0)  # Convert to (H, W, C)
 
-                # **Convert NumPy to PIL Image for Bicubic Resampling**
-                img = Image.fromarray((output * 255).astype(np.uint8))
+                # Convert NumPy array to uint8
+                output = (output * 255).astype(np.uint8)
+                scale_factor = 8.0 / 6.0  # Scale factor for SR output
 
-                # **Calculate new dimensions for 8 cm resolution**
-                # Since we want to keep the pixel dimensions at 256x256, we don't change the image size.
-                # Instead, we update the georeferencing transform to reflect the new resolution.
-                new_transform = Affine(
-                    transform.a / upscale_factor, transform.b, transform.c,
-                    transform.d, transform.e / upscale_factor, transform.f
-                )
+                output_resampled = cv2.resize(output, (200, 200), interpolation=cv2.INTER_CUBIC)
 
-                # **Update Rasterio Profile (Correct Georeferencing)**
+
+                # Update profile with original georeferencing
                 profile.update({
-                    "height": 256,  # Keep the same pixel dimensions
-                    "width": 256,
-                    "transform": new_transform,  # Update the transform for 8 cm resolution
+                    "height": output_resampled.shape[0],  # Ensure dimensions match SR output
+                    "width": output_resampled.shape[1],
+                    "transform": Affine(
+                       0.08, transform.b, transform.c,
+                        transform.d, -0.08, transform.f),  # Preserve original georeferencing
                     "dtype": "uint8",
-                    "count": output.shape[2]  # Ensure correct band count
+                    "count": output_resampled.shape[2]  # Ensure correct band count
                 })
 
-                # **Save the Resampled Output as GeoTIFF**
+                # Save the SR output with georeferencing
                 with rasterio.open(output_tile_path, "w", **profile) as dst:
-                    dst.write((output * 255).astype(np.uint8).transpose(2, 0, 1))  # Convert to (Bands, H, W)
+                    dst.write(output_resampled.transpose(2, 0, 1))  # Convert to (Bands, H, W)
 
-            print(f"Saved SR image with bicubic resampling to 8 cm: {output_tile_path}")
+            print(f"Saved SR image with georeferencing: {output_tile_path}")
+
 
 def generate(args, model_dir='model', output_dir='generated_photos', gif_output_dir='progress_gifs', samples=10, model_type="pre_trained"):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
