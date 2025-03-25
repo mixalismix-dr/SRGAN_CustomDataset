@@ -337,7 +337,7 @@ def test_only(args):
 
     # Define directories
     original_raster_dir = args.LR_path  # Use LR path as reference
-    output_dir = './result/delft_base_batch_50'
+    output_dir = './result/delft_base_fine_tuned_batch_50'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all LR raster files

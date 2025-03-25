@@ -125,8 +125,6 @@ def train(args):
     pre_epoch = 0
     fine_epoch = 0
 
-    log_training_details(args.fine_train_epoch, args.pre_train_epoch, args.patch_size, args.LR_path, args.GT_path, args.fine_tuning)
-
     #### **Pre-Training Using L2 Loss**
     while pre_epoch < args.pre_train_epoch:
         epoch_loss = 0
