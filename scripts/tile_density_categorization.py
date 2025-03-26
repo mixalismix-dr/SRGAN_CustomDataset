@@ -8,11 +8,11 @@ from shapely.validation import make_valid
 import os
 
 # Paths
-tiles_dir = r"D:\Super_Resolution\Delft\HR\tiles_256x256"  # Tiles folder
-land_use_path = r"D:\Super_Resolution\shp\land_use_delft.shp"  # Land use shapefile
+tiles_dir = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\pre_process\delft\tiles_64x64"  # Tiles folder
+land_use_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\pre_process\delft\land_use_delft.shp"  # Land use shapefile
 
 # Define the grid size based on raster pixel size
-grid_size = 0.08  # Ensure this matches the raster's pixel resolution
+grid_size = 0.25  # Ensure this matches the raster's pixel resolution
 
 # Load land use data
 land_use = gpd.read_file(land_use_path)

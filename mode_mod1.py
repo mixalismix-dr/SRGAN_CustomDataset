@@ -334,12 +334,12 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/delft4"
-    output_dir = 'result/delft4_base_fine_tuned_batch_50'
+    original_raster_dir = r"test_data/rott_real_lr"
+    output_dir = 'result/rott_edge_fine_tuned_batch_50'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
-    raster_files = glob.glob(os.path.join(original_raster_dir, "tile_*.tif"))
+    raster_files = glob.glob(os.path.join(original_raster_dir, "LR_tile_*.tif"))
     raster_files.sort()  # Sort the files alphabetically (important for consistency)
 
     # Iterate through the LR tiles and generate SR images
