@@ -1,0 +1,13 @@
+Training Details:
+-----------------
+Time Started: 2025-03-26 09:08:43
+Time Finished: 2025-03-26 12:39:42
+Training Duration: 3h 30m 59s
+Total Samples Used: 2300
+Batch Size: 50
+Fine-tuned Epochs: 2000, Pretrained Epochs: 4000
+Patch Size: 24
+LR Path: custom_dataset/It1/train_LR4
+GT Path: custom_dataset/It1/train_HR4
+Fine Tuning: False
+-----------------
