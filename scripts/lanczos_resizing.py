@@ -59,7 +59,7 @@ def process_images(input_dir, output_dir, scale, resampling, mode):
                 else:
                     raise ValueError("Invalid mode. Choose 'down' or 'up'.")
 
-                # Resize with PIL using Lanczos
+                # Resize with PIL using
                 resized_pil = pil_image.resize(new_size, Image.BICUBIC)
 
                 # Convert back to NumPy array

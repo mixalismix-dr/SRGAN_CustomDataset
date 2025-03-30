@@ -334,8 +334,8 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/rott_real_lr"
-    output_dir = 'result/rott_edge_fine_tuned_batch_50'
+    original_raster_dir = r"test_data/zwolle"
+    output_dir = 'result/zwolle_edge_fine_tuned_batch_50'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
