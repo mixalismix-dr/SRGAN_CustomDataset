@@ -1,18 +1,19 @@
 import os
 import re
-import multiprocessing
+from multiprocessing import Pool
 import geopandas as gpd
 import rasterio
 import numpy as np
 from rasterio.windows import from_bounds
 from shapely.geometry import box
 import fiona
+from tqdm import tqdm
 
 # Input Paths
 land_use_path = r"/mnt/SRGAN/data/land_use_sgravenhage.shp"
 grid_path = r"/mnt/SRGAN/data/Delft_grid.shp"
 raster_path = r"/mnt/SRGAN/data/delft_lr.tif"
-output_base = r"/mnt/SRGAN/data#"
+output_base = r"/mnt/SRGAN/data"
 
 
 def clean_name(name):
@@ -120,9 +121,10 @@ def main():
 
     # Process tiles in parallel with chunksize
     print("Processing tiles...")
-    with multiprocessing.Pool() as pool:
-        # Get results to track successful exports
-        results = pool.map(process_tile, args, chunksize=10)
+
+    with Pool() as pool:
+        results = list(tqdm(pool.imap(process_tile, args), total=len(args)))
+
 
     # Count successful exports
     successful = sum(1 for r in results if r is not None)
