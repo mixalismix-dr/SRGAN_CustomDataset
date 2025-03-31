@@ -13,7 +13,7 @@ tiles_dir = r"D:\Super_Resolution\Utrecht\iteration_2\tiles_64x64"  # Tiles fold
 land_use_path = r"D:\Super_Resolution\Utrecht\land_use_utrecht.shp"  # Already cleaned shapefile
 
 # Grid size
-grid_size = 0.25
+grid_size = 0.08
 
 # Load land use
 land_use = gpd.read_file(land_use_path)

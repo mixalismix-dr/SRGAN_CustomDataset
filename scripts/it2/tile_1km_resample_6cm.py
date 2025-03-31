@@ -4,8 +4,8 @@ from rasterio.enums import Resampling
 from rasterio.warp import reproject
 
 # Input raster (8 cm resolution)
-input_raster = r"D:\Super_Resolution\Utrecht\utrecht_hr.tif"
-output_tile = r"D:\Super_Resolution\Utrecht\utrecht_hr_6cm.tif"
+input_raster = r"D:\Super_Resolution\Rotterdam\hr_1km_1km\Rotterdam_hr_1km_1km_3_2.tif"
+output_tile = r"D:\Super_Resolution\Rotterdam\hr_1km_1km\Rotterdam_hr_1km_1km_3_2_6cm.tif"
 
 # Parameters
 tile_size_m = 1000            # 1km
