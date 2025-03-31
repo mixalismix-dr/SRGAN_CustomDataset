@@ -19,12 +19,13 @@ import glob
 from rasterio.transform import Affine
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
-import logging
 import time
 from datetime import datetime
-
+import logging
+import socket
 from PIL import Image, ImageDraw, ImageFont
 
+hostname = socket.gethostname()
 # Tracking loss values
 pretrain_losses = []
 g_losses = []
@@ -92,6 +93,7 @@ def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, ba
         f"LR Path: {LR_path}\n"
         f"GT Path: {GT_path}\n"
         f"Fine Tuning: {fine_tuning}\n"
+        f"Hostname: {hostname}\n"
         f"-----------------\n"
     )
 
@@ -101,6 +103,7 @@ def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, ba
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(hostname)
 
     start_time = time.time()
 
@@ -334,8 +337,8 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/zwolle"
-    output_dir = 'result/zwolle_edge_fine_tuned_batch_50'
+    original_raster_dir = r"test_data/rott_real_lr"
+    output_dir = 'result/zwolle_edge_fine_tuned_karto06'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
