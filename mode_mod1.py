@@ -314,7 +314,7 @@ def test(args):
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
     generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num)
-    generator.load_state_dict(torch.load(args.generator_path, map_location="cuda"))
+    generator.load_state_dict(torch.load(args.generator_path))
     generator = generator.to(device)
     generator.eval()
 
@@ -360,7 +360,7 @@ def test_only(args):
     loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=args.num_workers)
 
     generator = Generator(img_feat=3, n_feats=64, kernel_size=3, num_block=args.res_num)
-    generator.load_state_dict(torch.load(args.generator_path, map_location="cuda"))
+    generator.load_state_dict(torch.load(args.generator_path))
     generator = generator.to(device)
     generator.eval()
 
