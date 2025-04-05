@@ -233,14 +233,15 @@ def train(args):
             adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
             total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
 
+
+            g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
+
             print(f"[Epoch {fine_epoch}] Loss breakdown:")
             print(f"  L2: {l2_loss_value.item():.6f}")
             print(f"  Percep: {percep_loss.item():.6f}")
             print(f"  Adv: {adversarial_loss.item():.6f}")
             print(f"  TV: {total_variance_loss.item():.6f}")
             print(f"  Total G_Loss: {g_loss.item():.6f}")
-
-            g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
 
             g_optim.zero_grad()
 
