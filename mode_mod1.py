@@ -144,7 +144,11 @@ def train(args):
             loss = l2_loss(gt, output)
 
             g_optim.zero_grad()
-            loss.backward()
+            try:
+                loss.backward()
+            except RuntimeError as e:
+                print(f"[Crash] Backward failed: {e}")
+                continue
             g_optim.step()
 
             output_np = output[0].detach().cpu().numpy().transpose(1, 2, 0)
