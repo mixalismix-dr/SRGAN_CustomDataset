@@ -103,6 +103,8 @@ def log_training_details(fine_epoch, pre_epoch, patch_size, LR_path, GT_path, ba
 
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch.autograd.set_detect_anomaly(True)
+
     print(hostname)
 
     start_time = time.time()
@@ -211,6 +213,11 @@ def train(args):
             d_loss = d_loss_real + d_loss_fake
 
             d_optim.zero_grad()
+
+            if not torch.isfinite(d_loss):
+                print(f"[ERROR] Generator loss is not finite at epoch {fine_epoch}: {d_loss.item()}")
+                continue
+
             d_loss.backward()
             d_optim.step()
             # optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
@@ -226,9 +233,21 @@ def train(args):
             adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
             total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
 
+            print(f"[Epoch {fine_epoch}] Loss breakdown:")
+            print(f"  L2: {l2_loss_value.item():.6f}")
+            print(f"  Percep: {percep_loss.item():.6f}")
+            print(f"  Adv: {adversarial_loss.item():.6f}")
+            print(f"  TV: {total_variance_loss.item():.6f}")
+            print(f"  Total G_Loss: {g_loss.item():.6f}")
+
             g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
 
             g_optim.zero_grad()
+
+            if not torch.isfinite(g_loss):
+                print(f"[ERROR] Generator loss is not finite at epoch {fine_epoch}: {g_loss.item()}")
+                continue
+
             g_loss.backward()
             g_optim.step()
             # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
