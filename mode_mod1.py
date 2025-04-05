@@ -148,7 +148,11 @@ def train(args):
                 loss.backward()
             except RuntimeError as e:
                 print(f"[Crash] Backward failed: {e}")
+                torch.cuda.empty_cache()
                 continue
+
+            torch.cuda.empty_cache()
+
             g_optim.step()
 
             output_np = output[0].detach().cpu().numpy().transpose(1, 2, 0)
