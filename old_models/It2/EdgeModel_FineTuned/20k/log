@@ -1,0 +1,12 @@
+Training Details:
+-----------------
+crashed on 3rd day at epoch 1025
+Training Duration: 4 days
+Total Samples Used: 20k
+Batch Size: 50
+Fine-tuned Epochs: 2000, Pretrained Epochs: 0
+Patch Size: 24
+LR Path: custom_dataset/It2/train_LR7
+GT Path: custom_dataset/It2/train_HR7
+Fine Tuning: True
+-----------------

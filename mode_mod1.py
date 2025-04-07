@@ -24,6 +24,7 @@ from datetime import datetime
 import logging
 import socket
 from PIL import Image, ImageDraw, ImageFont
+import cv2
 
 hostname = socket.gethostname()
 # Tracking loss values
@@ -125,7 +126,7 @@ def train(args):
 
     l2_loss = nn.MSELoss()
     g_optim = optim.Adam(generator.parameters(), lr=1e-4)
-    scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+    g_scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
     pre_epoch = 0
     fine_epoch = 0
@@ -156,7 +157,7 @@ def train(args):
 
             epoch_loss += loss.item()
 
-        scheduler.step()
+        g_scheduler.step()
 
         # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
@@ -184,7 +185,7 @@ def train(args):
     discriminator = Discriminator(patch_size=args.patch_size * args.scale).to(device).train()
 
     d_optim = optim.Adam(discriminator.parameters(), lr=1e-4)
-    scheduler = optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+    d_scheduler = optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
     VGG_loss = perceptual_loss(vgg_net)
     cross_ent = nn.BCELoss()
@@ -220,7 +221,6 @@ def train(args):
 
             d_loss.backward()
             d_optim.step()
-            # optim.lr_scheduler.StepLR(d_optim, step_size=2000, gamma=0.1)
 
             ## **Training Generator**
             output, _ = generator(lr)
@@ -233,20 +233,10 @@ def train(args):
             adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
             total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
 
-            print(f"[Epoch {fine_epoch}] Loss breakdown:")
-            print(f"  L2: {l2_loss_value.item():.6f}")
-            print(f"  Percep: {percep_loss.item():.6f}")
-            print(f"  Adv: {adversarial_loss.item():.6f}")
-            print(f"  TV: {total_variance_loss.item():.6f}")
-            print(f"  Total G_Loss: {g_loss.item():.6f}")
 
             g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
 
             g_optim.zero_grad()
-
-            if not torch.isfinite(g_loss):
-                print(f"[ERROR] Generator loss is not finite at epoch {fine_epoch}: {g_loss.item()}")
-                continue
 
             g_loss.backward()
             g_optim.step()
@@ -255,7 +245,8 @@ def train(args):
             epoch_g_loss += g_loss.item()
             epoch_d_loss += d_loss.item()
 
-        scheduler.step()
+        d_scheduler.step()
+        g_scheduler.step()
 
         avg_g_loss = epoch_g_loss / len(loader)
         avg_d_loss = epoch_d_loss / len(loader)
@@ -356,8 +347,8 @@ def test_only(args):
     generator.eval()
 
     # Directory for original raster metadata and output
-    original_raster_dir = r"test_data/rott_real_lr"
-    output_dir = 'result/zwolle_edge_fine_tuned_karto06'
+    original_raster_dir = args.LR_path
+    output_dir = 'result/zwolle_p3'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically
@@ -389,21 +380,26 @@ def test_only(args):
                 output = (output + 1.0) / 2.0  # Rescale to [0, 1]
                 output = output.transpose(1, 2, 0)  # Rearrange dimensions for saving
 
+                # Convert NumPy array to uint8
+                output = (output * 255).astype(np.uint8)
+                scale_factor = 8.0 / 6.0  # Scale factor for SR output
+
+                output_resampled = cv2.resize(output, (200, 200), interpolation=cv2.INTER_CUBIC)
+
                 # Update profile to match the SR resolution and output data
                 profile.update({
-                    "height": output.shape[0],
-                    "width": output.shape[1],
+                    "height": output_resampled.shape[0],  # Ensure dimensions match SR output
+                    "width": output_resampled.shape[1],
                     "transform": Affine(
-                        transform.a / args.scale, transform.b, transform.c,
-                        transform.d, transform.e / args.scale, transform.f
-                    ),  # Adjust affine for scaling
+                        0.08, transform.b, transform.c,
+                        transform.d, -0.08, transform.f),  # Preserve original georeferencing
                     "dtype": "uint8",
-                    "count": output.shape[2],  # Number of bands (e.g., RGB = 3)
+                    "count": output_resampled.shape[2]  # Ensure correct band count
                 })
 
-                # Write SR output as a GeoTIFF
+                # Save the SR output with georeferencing
                 with rasterio.open(output_tile_path, "w", **profile) as dst:
-                    dst.write((output * 255).astype(np.uint8).transpose(2, 0, 1))  # Save as uint8
+                    dst.write(output_resampled.transpose(2, 0, 1))  # Convert to (Bands, H, W)
 
             print(f"Saved SR image with metadata: {output_tile_path}")
 

@@ -1,40 +1,73 @@
-from skimage.metrics import peak_signal_noise_ratio as psnr
-from skimage.metrics import structural_similarity as ssim
+import os
 import cv2
 import numpy as np
+from skimage.metrics import peak_signal_noise_ratio as psnr
+from skimage.metrics import structural_similarity as ssim
+from tqdm import tqdm
+from tabulate import tabulate
 
-# Load images
-image1 = cv2.imread('ground_truth_hr_0_0.tif')        # Ground truth
-image2 = cv2.imread('resampled_0_0.tif')              # Bicubic
-image3 = cv2.imread('super_res_8cm.tif')              # SR result
+# === INPUT PATHS ===
+hr_dir = r"D:\Super_Resolution\Delft\HR\p3_flat"
+bicubic_dir = r"D:\Super_Resolution\Delft\HR\synthetic_lr_from_hr\tiles_upsampled_bicubic"
+sr_dir = r"D:\Super_Resolution\SRGAN_CustomDataset\result\p3"
 
-# Get the minimum common height and width
-min_h = min(image1.shape[0], image2.shape[0], image3.shape[0])
-min_w = min(image1.shape[1], image2.shape[1], image3.shape[1])
+# === STORAGE ===
+psnr_sr_all = []
+psnr_bicubic_all = []
+ssim_sr_all = []
+ssim_bicubic_all = []
 
-# Crop all images to the common shape (top-left crop)
-image1 = image1[:min_h, :min_w]
-image2 = image2[:min_h, :min_w]
-image3 = image3[:min_h, :min_w]
+# === LOOP ===
+hr_images = sorted([f for f in os.listdir(hr_dir) if f.endswith(".tif")])
 
-# Confirm shape match
-assert image1.shape == image2.shape == image3.shape, "Images must have the same dimensions"
+for filename in tqdm(hr_images):
+    base = filename.replace(".tif", "")
+    hr_path = os.path.join(hr_dir, filename)
+    bicubic_path = os.path.join(bicubic_dir, base + "_down.tif")
+    sr_path = os.path.join(sr_dir, "res_" + base + "_down.tif")
 
-# PSNR
-psnr_bicubic = psnr(image1, image2, data_range=255)
-psnr_sr = psnr(image1, image3, data_range=255)
+    if not os.path.exists(bicubic_path) or not os.path.exists(sr_path):
+        print(f"Skipping {base}: missing bicubic or SR image")
+        continue
 
-# SSIM (handle version compatibility)
-try:
-    ssim_bicubic = ssim(image1, image2, data_range=255, channel_axis=-1)  # skimage >= 0.19
-    ssim_sr = ssim(image1, image3, data_range=255, channel_axis=-1)
-except TypeError:
-    ssim_bicubic = ssim(image1, image2, data_range=255, multichannel=True)  # skimage < 0.19
-    ssim_sr = ssim(image1, image3, data_range=255, multichannel=True)
+    hr = cv2.imread(hr_path)
+    bicubic = cv2.imread(bicubic_path)
+    sr = cv2.imread(sr_path)
 
-# Print results
-print(f"Bicubic PSNR: {psnr_bicubic:.2f} dB")
-print(f"Bicubic SSIM: {ssim_bicubic:.4f}")
-print(f"SR PSNR: {psnr_sr:.2f} dB")
-print(f"SR SSIM: {ssim_sr:.4f}")
-print(image1.shape, image2.shape, image3.shape)
+    if hr is None or bicubic is None or sr is None:
+        print(f"Skipping {base}: unreadable image")
+        continue
+
+    # Crop to smallest common size
+    min_h = min(hr.shape[0], bicubic.shape[0], sr.shape[0])
+    min_w = min(hr.shape[1], bicubic.shape[1], sr.shape[1])
+    hr = hr[:min_h, :min_w]
+    bicubic = bicubic[:min_h, :min_w]
+    sr = sr[:min_h, :min_w]
+
+    # Compute metrics
+    psnr_sr = psnr(hr, sr, data_range=255)
+    psnr_bicubic = psnr(hr, bicubic, data_range=255)
+
+    try:
+        ssim_sr = ssim(hr, sr, data_range=255, channel_axis=-1)
+        ssim_bicubic = ssim(hr, bicubic, data_range=255, channel_axis=-1)
+    except TypeError:
+        ssim_sr = ssim(hr, sr, data_range=255, multichannel=True)
+        ssim_bicubic = ssim(hr, bicubic, data_range=255, multichannel=True)
+
+    # Store
+    psnr_sr_all.append(psnr_sr)
+    psnr_bicubic_all.append(psnr_bicubic)
+    ssim_sr_all.append(ssim_sr)
+    ssim_bicubic_all.append(ssim_bicubic)
+
+# === AVERAGE RESULTS ===
+table = [
+    ["PSNR (SR)", f"{np.mean(psnr_sr_all):.2f} dB"],
+    ["PSNR (Bicubic)", f"{np.mean(psnr_bicubic_all):.2f} dB"],
+    ["SSIM (SR)", f"{np.mean(ssim_sr_all):.4f}"],
+    ["SSIM (Bicubic)", f"{np.mean(ssim_bicubic_all):.4f}"]
+]
+
+print(tabulate(table, headers=["Metric", "Value"], tablefmt="grid"))

@@ -5,8 +5,8 @@ import numpy as np
 from tqdm import tqdm
 
 # Paths
-lr_input = r"D:\Super_Resolution\Utrecht\utrecht_lr_1km.tif"
-lr_output_dir = r"D:\Super_Resolution\Utrecht\iteration_2\tiles_64x64"
+lr_input = r"D:\Super_Resolution\Zwolle\Zwolle_lr.tif"
+lr_output_dir = r"D:\Super_Resolution\Zwolle\Iteration_2\LR_tiles_64x64"
 os.makedirs(lr_output_dir, exist_ok=True)
 
 # Tile size & overlap

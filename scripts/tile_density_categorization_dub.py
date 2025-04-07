@@ -9,11 +9,11 @@ import re
 ##For the cleaned shps
 
 # Paths
-tiles_dir = r"D:\Super_Resolution\Utrecht\iteration_2\tiles_256x256"  # Tiles folder
-land_use_path = r"D:\Super_Resolution\Utrecht\land_use_utrecht.shp"  # Already cleaned shapefile
+tiles_dir = r"D:\Super_Resolution\Rotterdam\Iteration2\tiles_64x64_3_2"  # Tiles folder
+land_use_path = r"D:\Super_Resolution\data\land_use\land_use_rotterdam.shp"  # Already cleaned shapefile
 
 # Grid size
-grid_size = 0.08
+grid_size = 0.25
 
 # Load land use
 land_use = gpd.read_file(land_use_path)
