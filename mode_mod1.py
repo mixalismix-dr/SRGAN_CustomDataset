@@ -176,7 +176,7 @@ def train(args):
             print(f"Pre-train Epoch {pre_epoch}, Loss: {pretrain_losses[-1]:.6f}, PSNR: {avg_psnr:.4f}")
             plot_loss(epochs_pretrain, pretrain_losses, "L2 Loss", "Loss", "pretrain_L2_loss.png", )
 
-        if pre_epoch % 800 == 0:
+        if pre_epoch % 8 == 0:
             torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
             # generate(args)
 
