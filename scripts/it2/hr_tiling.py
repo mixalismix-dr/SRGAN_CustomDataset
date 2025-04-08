@@ -6,8 +6,8 @@ from tqdm import tqdm
 from PIL import Image
 
 # Paths
-hr_upscaled_path = r"D:\Super_Resolution\data\Zwolle_hr_1km_1km\Zwolle_hr_1km_1km_4_3.tif"
-hr_output_dir = r"D:\Super_Resolution\Zwolle\Iteration_2\HR_tiles_4_3_256x256"
+hr_upscaled_path = r"D:\Super_Resolution\Hague\Hague_hr_1km_1km\Hague_lr_1km_1km_5_8.tif"
+hr_output_dir = r"D:\Super_Resolution\Hague\Iteration_2\HR_tiles_5_8_256x256"
 
 # Ensure output directory exists
 os.makedirs(hr_output_dir, exist_ok=True)

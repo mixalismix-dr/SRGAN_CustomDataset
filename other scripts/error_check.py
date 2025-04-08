@@ -1,8 +1,8 @@
 import os
 import rasterio
 
-lr_dir = "/mnt/SRGAN/custom_dataset/It1/train_LR4"
-hr_dir = "/mnt/SRGAN/custom_dataset/It1/train_HR4"
+lr_dir = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\custom_dataset\It1\train_LR4"
+hr_dir = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\custom_dataset\It1\train_HR4"
 
 lr_files = sorted([f for f in os.listdir(lr_dir) if f.endswith('.tif')])
 hr_files = sorted([f for f in os.listdir(hr_dir) if f.endswith('.tif')])
