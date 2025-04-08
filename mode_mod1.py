@@ -372,7 +372,7 @@ def test_only(args):
 
     # Directory for original raster metadata and output
     original_raster_dir = args.LR_path
-    output_dir = 'result/p3_othercities'
+    output_dir = 'result/hague'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically

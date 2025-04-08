@@ -4,8 +4,8 @@ from rasterio.windows import Window
 from rasterio.transform import Affine
 
 # Paths
-input_raster = r"D:\Super_Resolution\data\rasters\Zwolle_hr_6cm.tif"
-output_dir = r"D:\Super_Resolution\data\Zwolle_hr_1km_1km"
+input_raster = r"D:\Super_Resolution\Hague\Hague_hr_6cm.tif"
+output_dir = r"D:\Super_Resolution\Hague\Hague_hr_1km_1km"
 tile_size_m = 1000  # in meters
 
 # Create output folder
@@ -34,7 +34,7 @@ with rasterio.open(input_raster) as src:
                 "transform": transform_window
             })
 
-            out_path = os.path.join(output_dir, f"Zwolle_hr_1km_1km_{i}_{j}.tif")
+            out_path = os.path.join(output_dir, f"Hague_lr_1km_1km_{i}_{j}.tif")
             with rasterio.open(out_path, "w", **out_profile) as dst:
                 dst.write(src.read(window=window))
 
