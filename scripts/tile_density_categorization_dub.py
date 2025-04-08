@@ -9,8 +9,8 @@ import re
 ##For the cleaned shps
 
 # Paths
-tiles_dir = r"D:\Super_Resolution\Rotterdam\Iteration2\tiles_64x64_3_2"  # Tiles folder
-land_use_path = r"D:\Super_Resolution\data\land_use\land_use_rotterdam.shp"  # Already cleaned shapefile
+tiles_dir = r"D:\Super_Resolution\Zwolle\Iteration_2\LR_tiles_4_3_64x64"  # Tiles folder
+land_use_path = r"D:\Super_Resolution\data\land_use\land_use_zwolle.shp"  # Already cleaned shapefile
 
 # Grid size
 grid_size = 0.25

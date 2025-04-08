@@ -42,41 +42,47 @@ import numpy as np
 #         dst.write(upsampled_data)
 #
 # print(f"Upsampled raster saved as {output_raster}")
+import rasterio
+from rasterio.transform import Affine
+from PIL import Image
+import numpy as np
 
-input_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\LR_tile_0.tif"
-output_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\other scripts\resampled_0_0.tif"
+input_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\test_data\p3_othercities\LR_tile_3613.tif"
+output_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\test_data\p3_othercities\LR_tile_resampled_3613.tif"
 
 target_res = 0.08  # 8 cm resolution
-target_size = (256, 256)
 
 with rasterio.open(input_image) as src:
-    img = src.read(1)  # Read first band (grayscale)
-    profile = src.profile  # Get metadata
+    data = src.read()  # (bands, H, W)
+    profile = src.profile
+    height, width = data.shape[1], data.shape[2]
 
-    # Convert to PIL Image (ensure grayscale mode 'L')
-    img_pil = Image.fromarray(img).convert("L")
-    img_resampled = img_pil.resize(target_size, Image.BICUBIC)
+    # Compute scale factor based on original resolution
+    scale_factor = src.transform.a / target_res  # e.g. 0.25 / 0.08 = 3.125
+    new_width = int(width * scale_factor)
+    new_height = int(height * scale_factor)
 
-    # Convert back to NumPy array with original dtype
-    img_resampled_np = np.array(img_resampled, dtype=img.dtype)
+    upsampled = []
+    for band in data:
+        img_pil = Image.fromarray(band.astype(np.uint8))
+        img_resized = img_pil.resize((new_width, new_height), Image.BICUBIC)
+        upsampled.append(np.array(img_resized))
 
-    # Compute new affine transformation (upper-left remains fixed)
-    scale_x = target_res / src.transform.a
-    scale_y = target_res / -src.transform.e  # Negative because Y is flipped
-    new_transform = src.transform * Affine.scale(scale_x, scale_y)
+    upsampled_np = np.stack(upsampled, axis=0)
 
-    # Update profile
+    # Adjust transform to reflect higher resolution
+    new_transform = src.transform * Affine.scale(1 / scale_factor)
+
     profile.update({
-        "height": target_size[1],
-        "width": target_size[0],
+        "height": new_height,
+        "width": new_width,
         "transform": new_transform,
-        "dtype": img_resampled_np.dtype,
-        "count": 1  # Ensure output is single-band grayscale
+        "dtype": upsampled_np.dtype,
+        "count": upsampled_np.shape[0]
     })
 
-    # Write output raster
     with rasterio.open(output_image, "w", **profile) as dst:
-        dst.write(img_resampled_np, 1)
+        dst.write(upsampled_np)
 
-print(f"Resampled grayscale image saved to: {output_image}")
+print(f"Resampled raster saved to: {output_image}")
 

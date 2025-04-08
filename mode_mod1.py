@@ -25,6 +25,8 @@ import logging
 import socket
 from PIL import Image, ImageDraw, ImageFont
 import cv2
+import traceback
+
 
 hostname = socket.gethostname()
 # Tracking loss values
@@ -37,6 +39,10 @@ epochs_finetune = []
 # Create a TensorBoard writer
 writer = SummaryWriter(log_dir="runs/srgan_experiment")
 
+def log_exception(e, context=""):
+    with open("error_log.txt", "a") as f:
+        f.write(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ERROR in {context}:\n")
+        traceback.print_exc(file=f)
 
 def check_and_adjust_batch_size(dataset, batch_size):
     num_samples = len(dataset)
@@ -138,27 +144,37 @@ def train(args):
         num_samples = 0
 
         for tr_data in tqdm(loader, desc=f"Pre-training Epoch {pre_epoch + 1}/{args.pre_train_epoch}"):
-            gt = tr_data['GT'].to(device)
-            lr = tr_data['LR'].to(device)
 
-            output, _ = generator(lr)
-            loss = l2_loss(gt, output)
+            try:
+                gt = tr_data['GT'].to(device)
+                lr = tr_data['LR'].to(device)
 
-            g_optim.zero_grad()
-            loss.backward()
-            g_optim.step()
+                output, _ = generator(lr)
+                loss = l2_loss(gt, output)
 
-            output_np = output[0].detach().cpu().numpy().transpose(1, 2, 0)
-            gt_np = gt[0].cpu().numpy().transpose(1, 2, 0)
+                if not torch.isfinite(loss):
+                    print(f"[ERROR] Generator loss is not finite at epoch {pre_epoch}: {loss.item()}")
+                    continue
 
-            psnr = peak_signal_noise_ratio(gt_np, output_np, data_range=255.0)
-            psnr_total += psnr
-            num_samples += 1
+                g_optim.zero_grad()
+                loss.backward()
+                g_optim.step()
 
-            epoch_loss += loss.item()
+                output_np = output[0].detach().cpu().numpy().transpose(1, 2, 0)
+                gt_np = gt[0].cpu().numpy().transpose(1, 2, 0)
+
+                psnr = peak_signal_noise_ratio(gt_np, output_np, data_range=255.0)
+                psnr_total += psnr
+                num_samples += 1
+
+                epoch_loss += loss.item()
+
+            except Exception as e:
+                print(f"Error during pre-training: {e}")
+                log_exception(e, context="Pre-training loop")
+                continue
 
         g_scheduler.step()
-
         # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
         avg_psnr = psnr_total / num_samples
@@ -180,6 +196,7 @@ def train(args):
             torch.save(generator.state_dict(), f'./model/pre_trained_model_{pre_epoch}.pt')
             # generate(args)
 
+
     #### **Fine-Tuning Using Perceptual & Adversarial Loss**
     vgg_net = vgg19().to(device).eval()
     discriminator = Discriminator(patch_size=args.patch_size * args.scale).to(device).train()
@@ -200,50 +217,57 @@ def train(args):
         epoch_d_loss = 0
 
         for tr_data in tqdm(loader, desc=f"Fine-tuning Epoch {fine_epoch + 1}/{args.fine_train_epoch}"):
-            gt = tr_data['GT'].to(device)
-            lr = tr_data['LR'].to(device)
+            try:
+                gt = tr_data['GT'].to(device)
+                lr = tr_data['LR'].to(device)
 
 
-            ## **Training Discriminator**
-            output, _ = generator(lr)
-            fake_prob = discriminator(output)
-            real_prob = discriminator(gt)
+                ## **Training Discriminator**
+                output, _ = generator(lr)
+                fake_prob = discriminator(output)
+                real_prob = discriminator(gt)
 
-            d_loss_real = cross_ent(real_prob, real_label)
-            d_loss_fake = cross_ent(fake_prob, fake_label)
-            d_loss = d_loss_real + d_loss_fake
+                d_loss_real = cross_ent(real_prob, real_label)
+                d_loss_fake = cross_ent(fake_prob, fake_label)
+                d_loss = d_loss_real + d_loss_fake
 
-            d_optim.zero_grad()
+                d_optim.zero_grad()
 
-            if not torch.isfinite(d_loss):
-                print(f"[ERROR] Generator loss is not finite at epoch {fine_epoch}: {d_loss.item()}")
+                if not torch.isfinite(d_loss):
+                    print(f"[ERROR] Generator loss is not finite at epoch {fine_epoch}: {d_loss.item()}")
+                    continue
+
+                d_loss.backward()
+                d_optim.step()
+
+
+                ## **Training Generator**
+                output, _ = generator(lr)
+                fake_prob = discriminator(output)
+
+                _percep_loss, hr_feat, sr_feat = VGG_loss((gt + 1.0) / 2.0, (output + 1.0) / 2.0, layer=args.feat_layer)
+
+                l2_loss_value = l2_loss(output, gt)
+                percep_loss = args.vgg_rescale_coeff * _percep_loss
+                adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
+                total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
+
+
+                g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
+
+                g_optim.zero_grad()
+
+                g_loss.backward()
+                g_optim.step()
+                # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
+
+                epoch_g_loss += g_loss.item()
+                epoch_d_loss += d_loss.item()
+
+            except Exception as e:
+                print(f"Error during fine-tuning: {e}")
+                log_exception(e, context="Fine-tuning loop")
                 continue
-
-            d_loss.backward()
-            d_optim.step()
-
-            ## **Training Generator**
-            output, _ = generator(lr)
-            fake_prob = discriminator(output)
-
-            _percep_loss, hr_feat, sr_feat = VGG_loss((gt + 1.0) / 2.0, (output + 1.0) / 2.0, layer=args.feat_layer)
-
-            l2_loss_value = l2_loss(output, gt)
-            percep_loss = args.vgg_rescale_coeff * _percep_loss
-            adversarial_loss = args.adv_coeff * cross_ent(fake_prob, real_label)
-            total_variance_loss = args.tv_loss_coeff * tv_loss(args.vgg_rescale_coeff * (hr_feat - sr_feat) ** 2)
-
-
-            g_loss = percep_loss + adversarial_loss + total_variance_loss + l2_loss_value
-
-            g_optim.zero_grad()
-
-            g_loss.backward()
-            g_optim.step()
-            # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
-
-            epoch_g_loss += g_loss.item()
-            epoch_d_loss += d_loss.item()
 
         d_scheduler.step()
         g_scheduler.step()
@@ -276,7 +300,7 @@ def train(args):
         patch_size=args.patch_size,
         LR_path=args.LR_path,
         GT_path=args.GT_path,
-        batch_size = args.batch_size,
+        batch_size=args.batch_size,
         fine_tuning=args.fine_tuning,
         duration=duration,
         num_images=num_images,
@@ -348,7 +372,7 @@ def test_only(args):
 
     # Directory for original raster metadata and output
     original_raster_dir = args.LR_path
-    output_dir = 'result/zwolle_p3'
+    output_dir = 'result/p3_othercities'
     os.makedirs(output_dir, exist_ok=True)
 
     # Get all original raster files dynamically

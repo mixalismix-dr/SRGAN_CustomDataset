@@ -7,8 +7,8 @@ from tqdm import tqdm
 from tabulate import tabulate
 
 # === INPUT PATHS ===
-hr_dir = r"D:\Super_Resolution\Delft\HR\p3_flat"
-bicubic_dir = r"D:\Super_Resolution\Delft\HR\synthetic_lr_from_hr\tiles_upsampled_bicubic"
+hr_dir = r"D:\Super_Resolution\Zwolle\Iteration_2\HR_tiles_4_3_256x256"
+bicubic_dir = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\test_data\p3\LR_tile_resampled_0_0.tif"
 sr_dir = r"D:\Super_Resolution\SRGAN_CustomDataset\result\p3"
 
 # === STORAGE ===
