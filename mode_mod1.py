@@ -240,6 +240,9 @@ def train(args):
                     continue
 
                 d_loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(discriminator.parameters(), max_norm=1.0)
+
                 d_optim.step()
 
 
@@ -260,7 +263,13 @@ def train(args):
                 g_optim.zero_grad()
 
                 g_loss.backward()
+
+                torch.nn.utils.clip_grad_norm_(generator.parameters(), max_norm=1.0)
+
                 g_optim.step()
+                torch.nn.utils.clip_grad_norm_(generator.parameters(), max_norm=1.0)
+                torch.nn.utils.clip_grad_norm_(discriminator.parameters(), max_norm=1.0)
+
                 # optim.lr_scheduler.StepLR(g_optim, step_size=2000, gamma=0.1)
 
                 epoch_g_loss += g_loss.item()

@@ -29,7 +29,12 @@ parser.add_argument("--mode", type = str, default = 'train')
 args = parser.parse_args()
 
 if args.mode == 'train':
-    train(args)
+    try:
+        train(args)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"An error occurred during training:{e}")
     
 elif args.mode == 'test':
     test(args)
