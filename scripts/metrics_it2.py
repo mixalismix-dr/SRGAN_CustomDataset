@@ -135,9 +135,9 @@ def save_metrics_to_csv(category_metrics, output_metrics_file):
 
 def main():
     # Paths
-    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\p3"
-    hr_path = r"D:\Super_Resolution\Zwolle\Iteration_2\HR_tiles_4_3_256x256"
-    lr_path = r"D:\Super_Resolution\Zwolle\Iteration_2\LR_tiles_4_3_64x64"
+    sr_path = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\result\hague"
+    hr_path = r"D:\Super_Resolution\Hague\Iteration_2\HR_tiles_5_8_256x256"
+    lr_path = r"D:\Super_Resolution\Hague\Iteration_2\LR_tiles_5_8_64x64"
     output_metrics_file = "metrics_results_new.csv"
 
     # Initialize storage for category-based results

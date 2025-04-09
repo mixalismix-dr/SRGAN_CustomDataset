@@ -38,8 +38,8 @@ import re
 #
 
 # Define the base directories
-lr_base_dir = r"D:\Super_Resolution\Zwolle\Iteration_2\LR_tiles_4_3_64x64"
-hr_base_dir = r"D:\Super_Resolution\Zwolle\Iteration_2\HR_tiles_4_3_256x256"
+lr_base_dir = r"D:\Super_Resolution\Hague\Iteration_2\LR_tiles_5_8_64x64"
+hr_base_dir = r"D:\Super_Resolution\Hague\Iteration_2\HR_tiles_5_8_256x256"
 
 # Function to extract the tile number from LR tile filename
 def extract_tile_number(filename):

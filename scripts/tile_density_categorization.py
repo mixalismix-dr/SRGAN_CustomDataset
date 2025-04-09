@@ -8,8 +8,8 @@ from shapely.validation import make_valid
 import os
 
 # Paths
-tiles_dir = r"D:\Super_Resolution\Rotterdam\Iteration2\tiles_64x64_3_2"  # Tiles folder
-land_use_path = r"D:\Super_Resolution\data\land_use\land_use_rotterdam.shp"  # Already cleaned shapefile
+tiles_dir = r"D:\Super_Resolution\Hague\Iteration_2\LR_tiles_5_8_64x64"  # Tiles folder
+land_use_path = r"D:\Super_Resolution\data\land_use\land_use_sgravenhage.shp"  # Already cleaned shapefile
 
 # Define the grid size based on raster pixel size
 grid_size = 0.25  # Ensure this matches the raster's pixel resolution

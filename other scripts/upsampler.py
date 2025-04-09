@@ -47,8 +47,8 @@ from rasterio.transform import Affine
 from PIL import Image
 import numpy as np
 
-input_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\test_data\hague\LR_tile_277.tif"
-output_image = r"C:\Users\mike_\OneDrive\Desktop\MSc Geomatics\Master Thesis\Codebases\SRGAN_CustomDataset\test_data\hague\LR_tile_resampled_277.tif"
+input_image = r"D:\Super_Resolution\Zwolle\Iteration_2\LR_tiles_4_3_64x64\LR_tile_5101.tif"
+output_image = r"D:\Super_Resolution\Zwolle\Iteration_2\LR_tiles_4_3_64x64\LR_tile_5101_resampled.tif"
 
 target_res = 0.08  # 8 cm resolution
 

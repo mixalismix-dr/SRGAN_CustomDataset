@@ -1,4 +1,6 @@
 import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+
 import torch
 import imageio
 import torch.nn as nn
